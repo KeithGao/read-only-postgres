@@ -1234,6 +1234,7 @@ HeapTupleSatisfiesVacuum(HeapTupleHeader tuple, TransactionId OldestXmin,
 bool
 HeapTupleIsSurelyDead(HeapTupleHeader tuple, TransactionId OldestXmin)
 {
+	return true;
 	/*
 	 * If the inserting transaction is marked invalid, then it aborted, and
 	 * the tuple is definitely dead.  If it's marked neither committed nor

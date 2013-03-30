@@ -51,8 +51,9 @@ extern PGDLLIMPORT SnapshotData SnapshotToastData;
  *	Hint bits in the HeapTuple's t_infomask may be updated as a side effect;
  *	if so, the indicated buffer is marked dirty.
  */
-#define HeapTupleSatisfiesVisibility(tuple, snapshot, buffer) \
-	((*(snapshot)->satisfies) ((tuple)->t_data, snapshot, buffer))
+#define HeapTupleSatisfiesVisibility(tuple, snapshot, buffer) true
+ 
+ // ((*(snapshot)->satisfies) ((tuple)->t_data, snapshot, buffer))
 
 /* Result codes for HeapTupleSatisfiesVacuum */
 typedef enum
