@@ -20,3 +20,4 @@ print `~/pgsql/bin/pg_ctl -D ~/pgdata stop`;
 
 # original time: 0.768125000000001
 # modified time: 0.766377000000001
+# that's just a 0.227567% increase. Not very good
