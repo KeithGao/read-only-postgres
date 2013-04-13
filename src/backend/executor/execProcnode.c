@@ -17,6 +17,10 @@
  *-------------------------------------------------------------------------
  */
 /*
+ *	 NOTE: The information in this comment is out of date because of an
+ *	       optimization to minimize function call overhead. TODO-AMS: update
+ *	       this comment.
+ *
  *	 INTERFACE ROUTINES
  *		ExecInitNode	-		initialize a plan node and its subplans
  *		ExecProcNode	-		get a tuple by executing the plan node
@@ -343,11 +347,223 @@ ExecInitNode(Plan *node, EState *estate, int eflags)
 	return result;
 }
 
+/* ----------------------------------------------------------------
+ *		ExecProcNodeMany
+ *
+ *		Executes the given node to process at most max_tuples tuples. Fills
+ *		slots with the processed TupleTableSlots. Returns how many tuples
+ *		were processed.
+ *
+ *		The point of this function is to remove function call overhead,
+ *		since normally ExecProcNode is called once for every tuple processed.
+ * ----------------------------------------------------------------
+ */
+long
+ExecProcNodeMany(PlanState *node, TupleTableSlot **slots, long max_tuples)
+{
+	TupleTableSlot *result = NULL;
+	long num_processed;
+
+	/* true if this operator is optimized to minimize function calls */
+	bool optimizedOp;
+
+	CHECK_FOR_INTERRUPTS();
+
+	if (node->chgParam != NULL) /* something changed */
+		ExecReScan(node);		/* let ReScan handle this */
+
+	if (node->instrument)
+		InstrStartNode(node->instrument);
+
+	switch (nodeTag(node))
+	{
+			/*
+			 * control nodes
+			 */
+		case T_ResultState:
+			result = ExecResult((ResultState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_ModifyTableState:
+			result = ExecModifyTable((ModifyTableState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_AppendState:
+			result = ExecAppend((AppendState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_MergeAppendState:
+			result = ExecMergeAppend((MergeAppendState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_RecursiveUnionState:
+			result = ExecRecursiveUnion((RecursiveUnionState *) node);
+			optimizedOp = false;
+			break;
+
+			/* BitmapAndState does not yield tuples */
+
+			/* BitmapOrState does not yield tuples */
+
+			/*
+			 * scan nodes
+			 */
+		case T_SeqScanState:
+			result = ExecSeqScan((SeqScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_IndexScanState:
+			result = ExecIndexScan((IndexScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_IndexOnlyScanState:
+			result = ExecIndexOnlyScan((IndexOnlyScanState *) node);
+			optimizedOp = false;
+			break;
+
+			/* BitmapIndexScanState does not yield tuples */
+
+		case T_BitmapHeapScanState:
+			result = ExecBitmapHeapScan((BitmapHeapScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_TidScanState:
+			result = ExecTidScan((TidScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_SubqueryScanState:
+			result = ExecSubqueryScan((SubqueryScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_FunctionScanState:
+			result = ExecFunctionScan((FunctionScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_ValuesScanState:
+			result = ExecValuesScan((ValuesScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_CteScanState:
+			result = ExecCteScan((CteScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_WorkTableScanState:
+			result = ExecWorkTableScan((WorkTableScanState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_ForeignScanState:
+			result = ExecForeignScan((ForeignScanState *) node);
+			optimizedOp = false;
+			break;
+
+			/*
+			 * join nodes
+			 */
+		case T_NestLoopState:
+			result = ExecNestLoop((NestLoopState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_MergeJoinState:
+			result = ExecMergeJoin((MergeJoinState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_HashJoinState:
+			result = ExecHashJoin((HashJoinState *) node);
+			optimizedOp = false;
+			break;
+
+			/*
+			 * materialization nodes
+			 */
+		case T_MaterialState:
+			result = ExecMaterial((MaterialState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_SortState:
+			result = ExecSort((SortState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_GroupState:
+			result = ExecGroup((GroupState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_AggState:
+			result = ExecAgg((AggState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_WindowAggState:
+			result = ExecWindowAgg((WindowAggState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_UniqueState:
+			result = ExecUnique((UniqueState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_HashState:
+			result = ExecHash((HashState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_SetOpState:
+			result = ExecSetOp((SetOpState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_LockRowsState:
+			result = ExecLockRows((LockRowsState *) node);
+			optimizedOp = false;
+			break;
+
+		case T_LimitState:
+			result = ExecLimit((LimitState *) node);
+			optimizedOp = false;
+			break;
+
+		default:
+			elog(ERROR, "unrecognized node type: %d", (int) nodeTag(node));
+			result = NULL;
+			break;
+	}
+
+	if (!optimizedOp)
+	{
+		num_processed = (result) ? 1 : 0;
+		slots[0] = result;
+	}
+
+	if (node->instrument)
+		InstrStopNode(node->instrument, (double) num_processed);
+
+	return num_processed;
+}
 
 /* ----------------------------------------------------------------
  *		ExecProcNode
  *
- *		Execute the given node to return a(nother) tuple.
+ *		Execute the given node to return a(nother) tuple. In order to not
+ *		break existing code that has not (yet) been optimized for
+ *		ExecProcNodeMany, the original ExecProcNode is left unchanged here.
  * ----------------------------------------------------------------
  */
 TupleTableSlot *

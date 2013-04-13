@@ -17,7 +17,6 @@
 #include "executor/execdesc.h"
 #include "nodes/parsenodes.h"
 
-
 /*
  * The "eflags" argument to ExecutorStart and the various ExecInitNode
  * routines is a bitwise OR of the following flag bits, which tell the
@@ -216,6 +215,7 @@ extern void EvalPlanQualEnd(EPQState *epqstate);
  */
 extern PlanState *ExecInitNode(Plan *node, EState *estate, int eflags);
 extern TupleTableSlot *ExecProcNode(PlanState *node);
+extern long ExecProcNodeMany(PlanState *node, TupleTableSlot **slots, long max_tuples);
 extern Node *MultiExecProcNode(PlanState *node);
 extern void ExecEndNode(PlanState *node);
 

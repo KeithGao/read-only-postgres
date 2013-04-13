@@ -1345,6 +1345,8 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 	}
 }
 
+#define N_TUPLESLOTS (1000)
+
 /* ----------------------------------------------------------------
  *		ExecutePlan
  *
@@ -1366,13 +1368,17 @@ ExecutePlan(EState *estate,
 			ScanDirection direction,
 			DestReceiver *dest)
 {
-	TupleTableSlot *slot;
+	TupleTableSlot *slot[N_TUPLESLOTS];
 	long		current_tuple_count;
+	long		num_tuples_returned;
+	long		i; /* for loop variable */
 
 	/*
 	 * initialize local variables
 	 */
 	current_tuple_count = 0;
+	for (i = 0; i < N_TUPLESLOTS; i++)
+		slot[i] = NULL;
 
 	/*
 	 * Set the direction.
@@ -1388,15 +1394,21 @@ ExecutePlan(EState *estate,
 		ResetPerTupleExprContext(estate);
 
 		/*
-		 * Execute the plan and obtain a tuple
+		 * Execute the plan and obtain some tuples
 		 */
-		slot = ExecProcNode(planstate);
+		if (numberTuples == 0 || N_TUPLESLOTS <= numberTuples)
+			num_tuples_returned = ExecProcNodeMany(planstate, slot, N_TUPLESLOTS);
+		else
+			num_tuples_returned = ExecProcNodeMany(planstate, slot, numberTuples);
+		Assert(num_tuples_returned <= N_TUPLESLOTS);
+
+		elog(LOG, "processed %i tuples", num_tuples_returned);
 
 		/*
-		 * if the tuple is null, then we assume there is nothing more to
+		 * if no tuples are returned, then we assume there is nothing more to
 		 * process so we just end the loop...
 		 */
-		if (TupIsNull(slot))
+		if (num_tuples_returned == 0)
 			break;
 
 		/*
@@ -1406,16 +1418,33 @@ ExecutePlan(EState *estate,
 		 * Store this new "clean" tuple in the junkfilter's resultSlot.
 		 * (Formerly, we stored it back over the "dirty" tuple, which is WRONG
 		 * because that tuple slot has the wrong descriptor.)
+		 *
+		 * TODO-AMS: Make a new junk filter function that takes a page of
+		 *           tuples so we can get rid of more function call overhead.
 		 */
 		if (estate->es_junkFilter != NULL)
-			slot = ExecFilterJunk(estate->es_junkFilter, slot);
+		{
+			for (i = 0; i < num_tuples_returned; i++)
+			{
+				Assert(!TupIsNull(slot[i]));
+				slot[i] = ExecFilterJunk(estate->es_junkFilter, slot[i]);
+			}
+		}
 
 		/*
 		 * If we are supposed to send the tuple somewhere, do so. (In
 		 * practice, this is probably always the case at this point.)
+		 *
+		 * Short of modifying every receiveSlot function in postgres, there
+		 * doesn't seem to be a way to get rid of this per-tuple function call
+		 * overhead. This isn't a conceptually difficult change, but it would
+		 * involve a lot of work; let's put it off for later.
 		 */
 		if (sendTuples)
-			(*dest->receiveSlot) (slot, dest);
+		{
+			for (i = 0; i < num_tuples_returned; i++)
+				(*dest->receiveSlot) (slot[i], dest);
+		}
 
 		/*
 		 * Count tuples processed, if this is a SELECT.  (For other operation
@@ -1423,14 +1452,15 @@ ExecutePlan(EState *estate,
 		 * events.)
 		 */
 		if (operation == CMD_SELECT)
-			(estate->es_processed)++;
+			(estate->es_processed) += num_tuples_returned;
 
 		/*
 		 * check our tuple count.. if we've processed the proper number then
 		 * quit, else loop again and process more tuples.  Zero numberTuples
 		 * means no limit.
 		 */
-		current_tuple_count++;
+		current_tuple_count += num_tuples_returned;
+		Assert(numberTuples == 0 || current_tuple_count <= numberTuples);
 		if (numberTuples && numberTuples == current_tuple_count)
 			break;
 	}
