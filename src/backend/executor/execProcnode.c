@@ -548,7 +548,7 @@ ExecProcNodeMany(PlanState *node, TupleTableSlot **slots, long max_tuples)
 
 	if (!optimizedOp)
 	{
-		num_processed = (result) ? 1 : 0;
+		num_processed = (TupIsNull(result)) ? 0 : 1;
 		slots[0] = result;
 	}
 

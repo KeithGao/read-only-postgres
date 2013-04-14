@@ -1402,14 +1402,14 @@ ExecutePlan(EState *estate,
 			num_tuples_returned = ExecProcNodeMany(planstate, slot, numberTuples);
 		Assert(num_tuples_returned <= N_TUPLESLOTS);
 
-		elog(LOG, "processed %i tuples", num_tuples_returned);
-
 		/*
 		 * if no tuples are returned, then we assume there is nothing more to
 		 * process so we just end the loop...
 		 */
 		if (num_tuples_returned == 0)
 			break;
+		else
+			Assert(!TupIsNull(slot[0]));
 
 		/*
 		 * If we have a junk filter, then project a new tuple with the junk
