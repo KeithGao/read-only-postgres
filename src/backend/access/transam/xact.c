@@ -59,7 +59,7 @@
 int			DefaultXactIsoLevel = XACT_READ_COMMITTED;
 int			XactIsoLevel;
 
-bool		DefaultXactReadOnly = true;
+bool		DefaultXactReadOnly = false;
 bool		XactReadOnly;
 
 bool		DefaultXactDeferrable = false;
