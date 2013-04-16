@@ -19,7 +19,7 @@
 /*
  *	 NOTE: The information in this comment is out of date because of an
  *	       optimization to minimize function call overhead. TODO-AMS: update
- *	       this comment.
+ *	       this comment?
  *
  *	 INTERFACE ROUTINES
  *		ExecInitNode	-		initialize a plan node and its subplans
@@ -413,8 +413,10 @@ ExecProcNodeMany(PlanState *node, TupleTableSlot **slots, long max_tuples)
 			 * scan nodes
 			 */
 		case T_SeqScanState:
-			result = ExecSeqScan((SeqScanState *) node);
-			optimizedOp = false;
+			num_processed = ExecSeqScanMany((SeqScanState *) node,
+											slots,
+											max_tuples);
+			optimizedOp = true;
 			break;
 
 		case T_IndexScanState:

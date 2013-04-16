@@ -1345,8 +1345,6 @@ ExecEndPlan(PlanState *planstate, EState *estate)
 	}
 }
 
-#define N_TUPLESLOTS (1000)
-
 /* ----------------------------------------------------------------
  *		ExecutePlan
  *

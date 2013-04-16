@@ -23,6 +23,10 @@
 #include "utils/sortsupport.h"
 #include "utils/tuplestore.h"
 
+/*
+ * Size of TupleTableSlot array nodes that hold many TupleTableSlots
+ */
+#define N_TUPLESLOTS (2400)
 
 /* ----------------
  *	  IndexInfo information
@@ -1196,10 +1200,21 @@ typedef struct ScanState
 } ScanState;
 
 /*
- * SeqScan uses a bare ScanState as its state node, since it needs
+ * When we want to scan many tuples at a time, we need more TupleTableSlots.
+ * Now that we have sms_ScanTupleSlots[], we don't need to use
+ * ss_ScanTupleSlot.
+ */
+typedef struct ScanManyState
+{
+	ScanState ss;
+	TupleTableSlot *sms_ScanTupleSlots[N_TUPLESLOTS];
+} ScanManyState;
+
+/*
+ * SeqScan uses a bare ScanManyState as its state node, since it needs
  * no additional fields.
  */
-typedef ScanState SeqScanState;
+typedef ScanManyState SeqScanState;
 
 /*
  * These structs store information about index quals that don't have simple

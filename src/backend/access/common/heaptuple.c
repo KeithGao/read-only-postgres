@@ -1245,6 +1245,8 @@ slot_getallattrs(TupleTableSlot *slot)
 	if (tuple == NULL)			/* internal error */
 		elog(ERROR, "cannot extract attribute from empty tuple slot");
 
+	Assert(tuple->t_data);
+
 	/*
 	 * load up any slots available from physical tuple
 	 */

@@ -82,6 +82,70 @@ ExecScanFetch(ScanState *node,
 	return (*accessMtd) (node);
 }
 
+/*
+ * ExecScanFetchMany -- fetch next batch of potential tuples
+ *
+ * This function serves the same purpose as ExecScanFetch but operates on
+ * many tuples at a time.
+ */
+static inline long
+ExecScanFetchMany(ScanState *node,
+				  TupleTableSlot **slots,
+				  long max_tuples,
+				  ExecScanAccessManyMtd accessMtd,
+				  ExecScanRecheckMtd recheckMtd)
+{
+	EState *estate = node->ps.state;
+	Assert(max_tuples > 0);
+
+	if (estate->es_epqTuple != NULL)
+	{
+		/*
+		 * We are inside an EvalPlanQual recheck.  Return the test tuple if
+		 * one is available, after rechecking any access-method-specific
+		 * conditions.
+		 */
+		Index		scanrelid = ((Scan *) node->ps.plan)->scanrelid;
+
+		Assert(scanrelid > 0);
+		if (estate->es_epqTupleSet[scanrelid - 1])
+		{
+			slots[0] = node->ss_ScanTupleSlot;
+
+			/* Return empty slot if we already returned a tuple */
+			if (estate->es_epqScanDone[scanrelid - 1])
+			{
+				ExecClearTuple(slots[0]);
+				return 0;
+			}
+			/* Else mark to remember that we shouldn't return more */
+			estate->es_epqScanDone[scanrelid - 1] = true;
+
+			/* Return empty slot if we haven't got a test tuple */
+			if (estate->es_epqTuple[scanrelid - 1] == NULL)
+			{
+				ExecClearTuple(slots[0]);
+				return 0;
+			}
+
+			/* Store test tuple in the plan node's scan slot */
+			ExecStoreTuple(estate->es_epqTuple[scanrelid - 1],
+						   slots[0], InvalidBuffer, false);
+
+			/* Check if it meets the access-method conditions */
+			if (!(*recheckMtd) (node, slots[0]))
+				ExecClearTuple(slots[0]);	/* would not be returned by scan */
+
+			return (TupIsNull(slots[0])) ? 0 : 1;
+		}
+	}
+
+	/*
+	 * Run the node-type-specific access method function to get the next tuples
+	 */
+	return (*accessMtd) (node, slots, max_tuples);
+}
+
 /* ----------------------------------------------------------------
  *		ExecScan
  *
@@ -226,6 +290,141 @@ ExecScan(ScanState *node,
 		 * Tuple fails qual, so free per-tuple memory and try again.
 		 */
 		ResetExprContext(econtext);
+	}
+}
+
+long
+ExecScanMany(ScanState *node,
+			 TupleTableSlot **resultSlots,
+			 long max_tuples,
+			 ExecScanAccessManyMtd accessMtd,
+			 ExecScanRecheckMtd recheckMtd)
+{
+	ExprContext *econtext;
+	List	   *qual;
+	ProjectionInfo *projInfo;
+	ExprDoneCond isDone;
+	long nTuples;
+	long nResTuples = 0;
+	long i;
+
+	Assert(max_tuples > 0);
+
+	/*
+	 * Fetch data from node
+	 */
+	qual = node->ps.qual;
+	projInfo = node->ps.ps_ProjInfo;
+	econtext = node->ps.ps_ExprContext;
+
+	/*
+	 * If we have neither a qual to check nor a projection to do, just skip
+	 * all the overhead and return the raw scan tuple.
+	 */
+	if (!qual && !projInfo)
+	{
+		ResetExprContext(econtext);
+		return ExecScanFetchMany(node, resultSlots, max_tuples, accessMtd, recheckMtd);
+	}
+
+	/*
+	 * Check to see if we're still projecting out tuples from a previous scan
+	 * tuple (because there is a function-returning-set in the projection
+	 * expressions).  If so, try to project another one.
+	 */
+	if (node->ps.ps_TupFromTlist)
+	{
+		Assert(projInfo);		/* can't get here if not projecting */
+		resultSlots[0] = ExecProject(projInfo, &isDone);
+		if (isDone == ExprMultipleResult)
+			return 1;
+		/* Done with that source tuple... */
+		node->ps.ps_TupFromTlist = false;
+	}
+
+	/*
+	 * Reset per-tuple memory context to free any expression evaluation
+	 * storage allocated in the previous tuple cycle.  Note this can't happen
+	 * until we're done projecting out tuples from a scan tuple.
+	 */
+	ResetExprContext(econtext);
+
+	/*
+	 * get a tuple from the access method.	Loop until we obtain a tuple that
+	 * passes the qualification.
+	 */
+	for (;;)
+	{
+		CHECK_FOR_INTERRUPTS();
+
+		TupleTableSlot *slots[N_TUPLESLOTS];
+		nTuples = ExecScanFetchMany(node, slots, max_tuples, accessMtd, recheckMtd);
+
+		/*
+		 * if nTuples == 0, then it means
+		 * there is nothing more to scan so we just return an empty slot,
+		 * being careful to use the projection result slot so it has correct
+		 * tupleDesc.
+		 */
+		if (nTuples == 0)
+		{
+			if (projInfo)
+				ExecClearTuple(projInfo->pi_slot);
+			return 0;
+		}
+
+		for (i = 0; i < nTuples; i++)
+		{
+			/*
+			 * place the current tuple into the expr context
+			 */
+			econtext->ecxt_scantuple = slots[i];
+
+			/*
+			 * check that the current tuple satisfies the qual-clause
+			 *
+			 * check for non-nil qual here to avoid a function call to ExecQual()
+			 * when the qual is nil ... saves only a few cycles, but they add up
+			 * ...
+			 */
+			if (!qual || ExecQual(qual, econtext, false))
+			{
+				/*
+				 * Found a satisfactory scan tuple.
+				 */
+				if (projInfo)
+				{
+					/*
+					 * Form a projection tuple, store it in the result tuple slot
+					 * and return it --- unless we find we can project no tuples
+					 * from this scan tuple, in which case continue scan.
+					 */
+					resultSlots[nResTuples] = ExecProject(projInfo, &isDone);
+					if (isDone != ExprEndResult)
+					{
+						node->ps.ps_TupFromTlist = (isDone == ExprMultipleResult);
+						nResTuples++;
+					}
+				}
+				else
+				{
+					/*
+					 * Here, we aren't projecting, so just return scan tuple.
+					 */
+					resultSlots[nResTuples] = slots[i];
+					nResTuples++;
+				}
+			}
+			else
+				InstrCountFiltered1(node, 1);
+
+			/*
+			 * free per-tuple memory and try again.
+			 */
+			ResetExprContext(econtext);
+		}
+
+		return nResTuples;
 	}
 }
 

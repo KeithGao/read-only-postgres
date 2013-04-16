@@ -380,6 +380,71 @@ ExecStoreTuple(HeapTuple tuple,
 	return slot;
 }
 
+/*
+ * ExecStoreManyTuples
+ *
+ * Same functionality as ExecStoreTuple above, but operates on nTuples tuples
+ * at once.
+ */
+void
+ExecStoreManyTuples(HeapTuple *tuples,
+					TupleTableSlot **slots,
+					long nTuples,
+					Buffer buffer,
+					bool shouldFree)
+{
+	long i;
+
+	Assert(tuples);
+	Assert(slots);
+	Assert(BufferIsValid(buffer) ? (!shouldFree) : true);
+
+	for (i = 0; i < nTuples; i++)
+	{
+		Assert(tuples[i]);
+		Assert(slots[i]);
+		Assert(slots[i]->tts_tupleDescriptor);
+
+		/*
+		 * Free any old physical tuple belonging to the slot.
+		 */
+		if (slots[i]->tts_shouldFree)
+			heap_freetuple(slots[i]->tts_tuple);
+		if (slots[i]->tts_shouldFreeMin)
+			heap_free_minimal_tuple(slots[i]->tts_mintuple);
+
+		/*
+		 * Store the new tuple into the specified slot.
+		 */
+		slots[i]->tts_isempty = false;
+		slots[i]->tts_shouldFree = shouldFree;
+		slots[i]->tts_shouldFreeMin = false;
+		slots[i]->tts_tuple = tuples[i];
+		slots[i]->tts_mintuple = NULL;
+
+		/* Mark extracted state invalid */
+		slots[i]->tts_nvalid = 0;
+
+		/*
+		 * If tuple is on a disk page, keep the page pinned as long as we hold a
+		 * pointer into it.  We assume the caller already has such a pin.
+		 *
+		 * This is coded to optimize the case where the slot previously held a
+		 * tuple on the same disk page: in that case releasing and re-acquiring
+		 * the pin is a waste of cycles.  This is a common situation during
+		 * seqscans, so it's worth troubling over.
+		 */
+		if (slots[i]->tts_buffer != buffer)
+		{
+			if (BufferIsValid(slots[i]->tts_buffer))
+				ReleaseBuffer(slots[i]->tts_buffer);
+			slots[i]->tts_buffer = buffer;
+			if (BufferIsValid(buffer))
+				IncrBufferRefCount(buffer);
+		}
+	}
+}
+
 /* --------------------------------
  *		ExecStoreMinimalTuple
  *
@@ -479,6 +544,50 @@ ExecClearTuple(TupleTableSlot *slot)	/* slot in which to store tuple */
 	slot->tts_nvalid = 0;
 
 	return slot;
+}
+
+/*
+ * ExecClearManyTuples
+ *
+ * This function is used to clear out many slots in the tuple table at once.
+ */
+void
+ExecClearManyTuples(TupleTableSlot **slots, long nSlots)
+{
+	long i;
+
+	Assert(slots);
+
+	for (i = 0; i < nSlots; i++)
+	{
+		Assert(slots[i]);
+		/*
+		 * Free the old physical tuple if necessary.
+		 */
+		if (slots[i]->tts_shouldFree)
+			heap_freetuple(slots[i]->tts_tuple);
+		if (slots[i]->tts_shouldFreeMin)
+			heap_free_minimal_tuple(slots[i]->tts_mintuple);
+
+		slots[i]->tts_tuple = NULL;
+		slots[i]->tts_mintuple = NULL;
+		slots[i]->tts_shouldFree = false;
+		slots[i]->tts_shouldFreeMin = false;
+
+		/*
+		 * Drop the pin on the referenced buffer, if there is one.
+		 */
+		if (BufferIsValid(slots[i]->tts_buffer))
+			ReleaseBuffer(slots[i]->tts_buffer);
+
+		slots[i]->tts_buffer = InvalidBuffer;
+
+		/*
+		 * Mark it empty.
+		 */
+		slots[i]->tts_isempty = true;
+		slots[i]->tts_nvalid = 0;
+	}
 }
 
 /* --------------------------------

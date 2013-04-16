@@ -148,10 +148,16 @@ extern TupleTableSlot *ExecStoreTuple(HeapTuple tuple,
 			   TupleTableSlot *slot,
 			   Buffer buffer,
 			   bool shouldFree);
+extern void ExecStoreManyTuples(HeapTuple *tuples,
+								TupleTableSlot **slots,
+								long nTuples,
+								Buffer buffer,
+								bool shouldFree);
 extern TupleTableSlot *ExecStoreMinimalTuple(MinimalTuple mtup,
 					  TupleTableSlot *slot,
 					  bool shouldFree);
 extern TupleTableSlot *ExecClearTuple(TupleTableSlot *slot);
+extern void ExecClearManyTuples(TupleTableSlot **slots, long nSlots);
 extern TupleTableSlot *ExecStoreVirtualTuple(TupleTableSlot *slot);
 extern TupleTableSlot *ExecStoreAllNullTuple(TupleTableSlot *slot);
 extern HeapTuple ExecCopySlotTuple(TupleTableSlot *slot);

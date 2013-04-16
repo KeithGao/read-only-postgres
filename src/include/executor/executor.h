@@ -244,10 +244,18 @@ extern TupleTableSlot *ExecProject(ProjectionInfo *projInfo,
  * prototypes from functions in execScan.c
  */
 typedef TupleTableSlot *(*ExecScanAccessMtd) (ScanState *node);
+typedef long (*ExecScanAccessManyMtd) (ScanState *node,
+                                       TupleTableSlot **slots,
+                                       long max_tuples);
 typedef bool (*ExecScanRecheckMtd) (ScanState *node, TupleTableSlot *slot);
 
 extern TupleTableSlot *ExecScan(ScanState *node, ExecScanAccessMtd accessMtd,
 		 ExecScanRecheckMtd recheckMtd);
+extern long ExecScanMany(ScanState *node,
+						 TupleTableSlot **resultSlots,
+						 long max_tuples,
+						 ExecScanAccessManyMtd accessMtd,
+						 ExecScanRecheckMtd recheckMtd);
 extern void ExecAssignScanProjectionInfo(ScanState *node);
 extern void ExecScanReScan(ScanState *node);
 

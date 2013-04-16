@@ -18,6 +18,9 @@
 
 extern SeqScanState *ExecInitSeqScan(SeqScan *node, EState *estate, int eflags);
 extern TupleTableSlot *ExecSeqScan(SeqScanState *node);
+extern long ExecSeqScanMany(SeqScanState *node,
+                            TupleTableSlot **slots,
+                            long max_tuples);
 extern void ExecEndSeqScan(SeqScanState *node);
 extern void ExecSeqMarkPos(SeqScanState *node);
 extern void ExecSeqRestrPos(SeqScanState *node);

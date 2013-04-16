@@ -1367,6 +1367,54 @@ heap_getnext(HeapScanDesc scan, ScanDirection direction)
 }
 
 /*
+ * heap_getnextmany
+ *
+ * Get up to next max_tuples tuples in scan.
+ * Returns the number of tuples retrieved.
+ */
+long
+heap_getnextmany(HeapScanDesc scan,
+				 ScanDirection direction,
+				 HeapTuple *tuplesOut,
+				 long max_tuples)
+{
+	/* Note: no locking manipulations needed */
+
+	/* TODO-AMS: It would be nice to make a heapGetManyTup, but for now, I'll
+	 * just loop over heapgettup */
+
+	long nTuples = 0;
+	long i = 0;
+
+	for (i = 0; i < max_tuples; i++)
+	{
+		if (scan->rs_pageatatime)
+			heapgettup_pagemode(scan, direction,
+								scan->rs_nkeys, scan->rs_key);
+		else
+			heapgettup(scan, direction, scan->rs_nkeys, scan->rs_key);
+
+		if (scan->rs_ctup.t_data == NULL)
+		{
+			/* heap_getnext returning EOS */
+			break;
+		}
+
+		/*
+		 * if we get here it means we have a new current scan tuple, so point to
+		 * the proper return buffer and return the tuple.
+		 */
+
+		pgstat_count_heap_getnext(scan->rs_rd);
+
+		tuplesOut[i] = &(scan->rs_ctup);
+		nTuples++;
+	}
+
+	return nTuples;
+}
+
+/*
  *	heap_fetch		- retrieve tuple with given tid
  *
  * On entry, tuple->t_self is the TID to fetch.  We pin the buffer holding
