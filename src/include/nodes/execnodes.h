@@ -26,7 +26,7 @@
 /*
  * Size of TupleTableSlot array nodes that hold many TupleTableSlots
  */
-#define N_TUPLESLOTS (2400)
+#define N_TUPLESLOTS (10)
 
 /* ----------------
  *	  IndexInfo information
