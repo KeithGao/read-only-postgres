@@ -516,8 +516,8 @@ typedef MinimalTupleData *MinimalTuple;
  */
 typedef struct HeapTupleData
 {
-	uint32		t_len;			/* length of *t_data */
-	ItemPointerData t_self;		/* SelfItemPointer */
+	uint16      t_index;        /* Index in the block for the tuple */
+	BlockNumber t_block;        /* Block in which the tuple is stored */      
 	Oid			t_tableOid;		/* table the tuple came from */
 	HeapTupleHeader t_data;		/* -> tuple header and data */
 } HeapTupleData;
