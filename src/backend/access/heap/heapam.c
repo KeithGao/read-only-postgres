@@ -270,8 +270,9 @@ heapgettup(HeapScanDesc scan,
 	BlockNumber page;
 	bool		finished;
 	Page		dp;
-	Pointer     lpp;
-	uint16      tupleidx;
+	ItemId     lpp;
+	OffsetNumber tupleidx;
+	int lines;
 	int         linesleft;
 
 	/*
@@ -299,18 +300,20 @@ heapgettup(HeapScanDesc scan,
 			}
 			page = scan->rs_startblock; /* first page */
 			heapgetpage(scan, page);
-			tupleidx = 0;
+			tupleidx = FirstOffsetNumber;
 			scan->rs_inited = true;
 		}
 		else
 		{
 			/* continue from previously returned page/tuple */
 			page = scan->rs_cblock;		/* current page */
-			tupleidx = tuple->t_index + 1;
+			tupleidx = OffsetNumberNext(ItemPointerGetOffsetNumber(&(tuple->t_self)));
 		}
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
+		lines = PageGetMaxOffsetNumber(dp);
 		/* page and lineoff now reference the physically next tid */
+		linesleft = lines - tupleidx + 1;
 	}
 	else if (backward)
 	{
@@ -348,17 +351,19 @@ heapgettup(HeapScanDesc scan,
 
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
+		lines = PageGetMaxOffsetNumber(dp);
 
 		if (!scan->rs_inited)
 		{
-			tupleidx =BLCKTUPLES - 1;	/* final offnum */
+			tupleidx = lines;	/* final offnum */
 			scan->rs_inited = true;
 		}
 		else
 		{
-			tupleidx = tupleidx->t_index - 1;
+			tupleidx = 	OffsetNumberPrev(ItemPointerGetOffsetNumber(&(tuple->t_self)));
 		}
 		/* page and lineoff now reference the physically previous tid */
+		linesleft = tupleidx;
 	}
 	else
 	{
@@ -379,7 +384,8 @@ heapgettup(HeapScanDesc scan,
 		/* Since the tuple was previously fetched, needn't lock page here */
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
 		tupleidx = tuple->t_index;
-		lpp = tuple->t_data;
+		lpp = PageGetItemId(dp, tupleidx);
+		Assert(ItemIdIsNormal(lpp));
 		tuple->t_data = (HeapTupleHeader) PageGetItem((Page) dp, lpp);
 
 		return;
@@ -389,34 +395,45 @@ heapgettup(HeapScanDesc scan,
 	 * advance the scan until we find a qualifying tuple or run out of stuff
 	 * to scan
 	 */
-	linesleft = (int)(BLCKTUPLES - tupleidx);
+	lpp = PageGetItemId(dp, tupleidx);
 	for (;;)
 	{
 		while (linesleft > 0)
 		{
-			bool		valid;
-			
-			lpp = PageGetIndex(dp, tupleidx, TUPLESIZE);
-			tuple->t_data = (HeapTupleHeader) PageGetItem((Page) dp, lpp);
+			if (ItemIdIsNormal(lpp))
+			{
+				bool		valid;
+				
+				lpp = PageGetIndex(dp, tupleidx, TUPLESIZE);
+				tuple->t_data = (HeapTupleHeader) PageGetItem((Page) dp, lpp);
 
-			/*
-			 * if current tuple qualifies, return it.
-			 */
-			
-			valid = true;
+				/*
+				 * if current tuple qualifies, return it.
+				 */
+				
+				valid = true;
 
-			if (key != NULL)
-				HeapKeyTest(tuple, RelationGetDescr(scan->rs_rd),
-							nkeys, key, valid);
+				if (key != NULL)
+					HeapKeyTest(tuple, RelationGetDescr(scan->rs_rd),
+								nkeys, key, valid);
 
-			if (valid) return;
+				if (valid) return;
+			}
 
-			/*
+			 /*
 			 * otherwise move to the next item on the page
 			 */
-			--linesleft;
-			if (backward) tupleidx--;
-			else tupleidx++;
+			 --linesleft;
+			 if (backward)
+			 {
+			 --lpp;	/* move back in this page's ItemId array */
+			 --tupleidx;
+			 }
+			 else
+			 {
+			 ++lpp;	/* move forward in this page's ItemId array */
+			 ++tupleidx;
+			 }
 		}
 
 		/*
@@ -476,9 +493,18 @@ heapgettup(HeapScanDesc scan,
 		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
-
-		if (backward) lpp = PageGetIndex(dp, BLCKTUPLES - 1, TUPLESIZE);
-		else lpp = PageGetIndex(dp, 0, TUPLESIZE);
+		lines = PageGetMaxOffsetNumber((Page) dp);
+		linesleft = lines;
+		if (backward)
+		{
+			tupleidx = lines;
+			lpp = PageGetItemId(dp, lines);
+		}
+		else
+		{
+			tupleidx = FirstOffsetNumber;
+			lpp = PageGetItemId(dp, FirstOffsetNumber);
+		}
 	}
 }
 

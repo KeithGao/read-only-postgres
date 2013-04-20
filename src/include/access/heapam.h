@@ -23,8 +23,7 @@
 #include "utils/snapshot.h"
 
 /* Tuple size */
-#define TUPLESIZE 256
-#define BLCKTUPLES (BLCKSZ / TUPLESIZE)
+#define TUPLESIZE 4096
 
 /* "options" flag bits for heap_insert */
 #define HEAP_INSERT_SKIP_WAL	0x0001

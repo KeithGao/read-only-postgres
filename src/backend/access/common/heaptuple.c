@@ -55,12 +55,14 @@
  *-------------------------------------------------------------------------
  */
 
+ /* THIS FILE NEEDS SO MANY MODIFICATIONS. WE SHOULD CHANGE THE FORMAT FIRST THOUGH */
+
 #include "postgres.h"
 
 #include "access/sysattr.h"
 #include "access/tuptoaster.h"
 #include "executor/tuptable.h"
-
+#include "access/heapam.h"
 
 /* Does att's datatype allow packing into the 1-byte-header varlena format? */
 #define ATT_IS_PACKABLE(att) \
@@ -533,7 +535,7 @@ heap_getsysattr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool *isnull)
 	{
 		case SelfItemPointerAttributeNumber:
 			/* pass-by-reference datatype */
-			result = PointerGetDatum(&(tup->t_self));
+			result = PointerGetDatum(&(tup->t_data));
 			break;
 		case ObjectIdAttributeNumber:
 			result = ObjectIdGetDatum(HeapTupleGetOid(tup));
@@ -583,12 +585,9 @@ heap_copytuple(HeapTuple tuple)
 	if (!HeapTupleIsValid(tuple) || tuple->t_data == NULL)
 		return NULL;
 
-	newTuple = (HeapTuple) palloc(HEAPTUPLESIZE + tuple->t_len);
-	newTuple->t_len = tuple->t_len;
-	newTuple->t_self = tuple->t_self;
+	newTuple = (HeapTuple) palloc(TUPLESIZE);
 	newTuple->t_tableOid = tuple->t_tableOid;
-	newTuple->t_data = (HeapTupleHeader) ((char *) newTuple + HEAPTUPLESIZE);
-	memcpy((char *) newTuple->t_data, (char *) tuple->t_data, tuple->t_len);
+	memcpy((char *) newTuple->t_data, (char *) tuple->t_data, TUPLESIZE);
 	return newTuple;
 }
 
@@ -610,11 +609,9 @@ heap_copytuple_with_tuple(HeapTuple src, HeapTuple dest)
 		return;
 	}
 
-	dest->t_len = src->t_len;
-	dest->t_self = src->t_self;
 	dest->t_tableOid = src->t_tableOid;
-	dest->t_data = (HeapTupleHeader) palloc(src->t_len);
-	memcpy((char *) dest->t_data, (char *) src->t_data, src->t_len);
+	dest->t_data = (HeapTupleHeader) palloc(TUPLESIZE);
+	memcpy((char *) dest->t_data, (char *) src->t_data, TUPLESIZE);
 }
 
 /*
@@ -624,6 +621,7 @@ heap_copytuple_with_tuple(HeapTuple src, HeapTuple dest)
  *
  * The result is allocated in the current memory context.
  */
+
 HeapTuple
 heap_form_tuple(TupleDesc tupleDescriptor,
 				Datum *values,
@@ -699,8 +697,6 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	 * And fill in the information.  Note we fill the Datum fields even though
 	 * this tuple may never become a Datum.
 	 */
-	tuple->t_len = len;
-	ItemPointerSetInvalid(&(tuple->t_self));
 	tuple->t_tableOid = InvalidOid;
 
 	HeapTupleHeaderSetDatumLength(td, len);
@@ -819,7 +815,6 @@ heap_modify_tuple(HeapTuple tuple,
 	 * (if any)
 	 */
 	newTuple->t_data->t_ctid = tuple->t_data->t_ctid;
-	newTuple->t_self = tuple->t_self;
 	newTuple->t_tableOid = tuple->t_tableOid;
 	if (tupleDesc->tdhasoid)
 		HeapTupleSetOid(newTuple, HeapTupleGetOid(tuple));
@@ -1509,8 +1504,6 @@ heap_tuple_from_minimal_tuple(MinimalTuple mtup)
 	uint32		len = mtup->t_len + MINIMAL_TUPLE_OFFSET;
 
 	result = (HeapTuple) palloc(HEAPTUPLESIZE + len);
-	result->t_len = len;
-	ItemPointerSetInvalid(&(result->t_self));
 	result->t_tableOid = InvalidOid;
 	result->t_data = (HeapTupleHeader) ((char *) result + HEAPTUPLESIZE);
 	memcpy((char *) result->t_data + MINIMAL_TUPLE_OFFSET, mtup, mtup->t_len);
@@ -1530,10 +1523,8 @@ minimal_tuple_from_heap_tuple(HeapTuple htup)
 	MinimalTuple result;
 	uint32		len;
 
-	Assert(htup->t_len > MINIMAL_TUPLE_OFFSET);
-	len = htup->t_len - MINIMAL_TUPLE_OFFSET;
+	len = TUPLESIZE - MINIMAL_TUPLE_OFFSET;
 	result = (MinimalTuple) palloc(len);
 	memcpy(result, (char *) htup->t_data + MINIMAL_TUPLE_OFFSET, len);
-	result->t_len = len;
 	return result;
 }
