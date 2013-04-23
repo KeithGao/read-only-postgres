@@ -1937,17 +1937,6 @@ EvalPlanQualFetch(EState *estate, Relation relation, int lockmode,
 		 * As above, it should be safe to examine xmax and t_ctid without the
 		 * buffer content lock, because they can't be changing.
 		 */
-		if (ItemPointerEquals(&tuple.t_self, &tuple.t_data->t_ctid))
-		{
-			/* deleted, so forget about it */
-			ReleaseBuffer(buffer);
-			return NULL;
-		}
-
-		/* updated, so look at the updated row */
-		tuple.t_self = tuple.t_data->t_ctid;
-		/* updated row should have xmin matching this xmax */
-		priorXmax = HeapTupleHeaderGetXmax(tuple.t_data);
 		ReleaseBuffer(buffer);
 		/* loop back to fetch next in chain */
 	}

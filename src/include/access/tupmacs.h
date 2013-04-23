@@ -34,7 +34,7 @@
  *
  * Note that T must already be properly aligned for this to work correctly.
  */
-#define fetchatt(A,T) fetch_att(T, (A)->attbyval, (A)->attlen)
+#define fetchatt(A,T) fetch_att(T, (A)->attbyval, ATTRSIZE)
 
 /*
  * Same, but work from byval/len parameters rather than Form_pg_attribute.

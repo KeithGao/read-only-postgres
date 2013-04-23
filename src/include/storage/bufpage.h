@@ -389,7 +389,7 @@ XLogRecPtr NULLXLOGREC;
  */
 
 extern void PageInit(Page page, Size pageSize, Size specialSize);
-extern bool PageHeaderIsValid(PageHeader page);
+extern bool PageHeaderIsValid(NewPageHeader page);
 extern OffsetNumber PageAddItem(Page page, Item item, Size size,
 			OffsetNumber offsetNumber, bool overwrite, bool is_heap);
 extern Page PageGetTempPage(Page page);

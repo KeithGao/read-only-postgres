@@ -357,10 +357,10 @@ fill_seq_with_data(Relation rel, HeapTuple tuple)
 		item = PageGetItem((Page) page, itemId);
 
 		HeapTupleHeaderSetXmin((HeapTupleHeader) item, FrozenTransactionId);
-		((HeapTupleHeader) item)->t_infomask |= HEAP_XMIN_COMMITTED;
+		// ((HeapTupleHeader) item)->t_infomask |= HEAP_XMIN_COMMITTED;
 
 		HeapTupleHeaderSetXmin(tuple->t_data, FrozenTransactionId);
-		tuple->t_data->t_infomask |= HEAP_XMIN_COMMITTED;
+		// tuple->t_data->t_infomask |= HEAP_XMIN_COMMITTED;
 	}
 
 	MarkBufferDirty(buf);
@@ -1108,8 +1108,8 @@ read_seq_tuple(SeqTable elm, Relation rel, Buffer *buf, HeapTuple seqtuple)
 	if (HeapTupleHeaderGetXmax(seqtuple->t_data) != InvalidTransactionId)
 	{
 		HeapTupleHeaderSetXmax(seqtuple->t_data, InvalidTransactionId);
-		seqtuple->t_data->t_infomask &= ~HEAP_XMAX_COMMITTED;
-		seqtuple->t_data->t_infomask |= HEAP_XMAX_INVALID;
+		// seqtuple->t_data->t_infomask &= ~HEAP_XMAX_COMMITTED;
+		// seqtuple->t_data->t_infomask |= HEAP_XMAX_INVALID;
 		SetBufferCommitInfoNeedsSave(*buf);
 	}
 

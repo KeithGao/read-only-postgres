@@ -143,7 +143,7 @@ PageAddItem(Page page,
 
 	/* was offsetNumber passed in? */
 	if (OffsetNumberIsValid(offsetNumber)) {
-		ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Can't modify item: read only bitch!")))
+		ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Can't modify item: read only bitch!")));
 		return InvalidOffsetNumber;
 	}
 

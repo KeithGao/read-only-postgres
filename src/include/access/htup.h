@@ -20,6 +20,15 @@
 #include "storage/itemptr.h"
 #include "storage/relfilenode.h"
 
+
+/* We can handle attr extraction now */
+#define DISABLE_COMPLEX_MACRO true
+
+/* Fixed length tuple constants */
+#define TUPLESIZE 4096
+#define ATTRSIZE 32
+#define NUMATTRS 128
+
 /*
  * MaxTupleAttributeNumber limits the number of (user) columns in a tuple.
  * The key limit on this value is that the size of the fixed overhead for
@@ -30,7 +39,7 @@
  * so that alterations in HeapTupleHeaderData layout won't change the
  * supported max number of columns.
  */
-#define MaxTupleAttributeNumber 1664	/* 8 * 208 */
+#define MaxTupleAttributeNumber 128	/* 8 * 208 */
 
 /*
  * MaxHeapAttributeNumber limits the number of (user) columns in a table.
@@ -44,7 +53,7 @@
  * into the disk-block-based limit on overall tuple size if you have more
  * than a thousand or so columns.  TOAST won't help.
  */
-#define MaxHeapAttributeNumber	1600	/* 8 * 200 */
+#define MaxHeapAttributeNumber	128	/* 8 * 200 */
 
 /*
  * Heap tuple header.  To avoid wasting space, the fields should be
@@ -157,6 +166,8 @@ typedef struct HeapTupleHeaderData
 
 typedef HeapTupleHeaderData *HeapTupleHeader;
 
+typedef Pointer HeapTupleStart;
+
 /*
  * information stored in t_infomask:
  */
@@ -211,25 +222,13 @@ typedef HeapTupleHeaderData *HeapTupleHeader;
  * macros evaluate their other argument only once.
  */
 
-#define HeapTupleHeaderGetXmin(tup) \
-( \
-	(tup)->t_choice.t_heap.t_xmin \
-)
+#define HeapTupleHeaderGetXmin(tup) 0
 
-#define HeapTupleHeaderSetXmin(tup, xid) \
-( \
-	(tup)->t_choice.t_heap.t_xmin = (xid) \
-)
+#define HeapTupleHeaderSetXmin(tup, xid) (void)NULL
 
-#define HeapTupleHeaderGetXmax(tup) \
-( \
-	(tup)->t_choice.t_heap.t_xmax \
-)
+#define HeapTupleHeaderGetXmax(tup) 0
 
-#define HeapTupleHeaderSetXmax(tup, xid) \
-( \
-	(tup)->t_choice.t_heap.t_xmax = (xid) \
-)
+#define HeapTupleHeaderSetXmax(tup, xid) (void)NULL
 
 /*
  * HeapTupleHeaderGetRawCommandId will give you what's in the header whether
@@ -243,77 +242,30 @@ typedef HeapTupleHeaderData *HeapTupleHeader;
 )
 
 /* SetCmin is reasonably simple since we never need a combo CID */
-#define HeapTupleHeaderSetCmin(tup, cid) \
-do { \
-	Assert(!((tup)->t_infomask & HEAP_MOVED)); \
-	(tup)->t_choice.t_heap.t_field3.t_cid = (cid); \
-	(tup)->t_infomask &= ~HEAP_COMBOCID; \
-} while (0)
+#define HeapTupleHeaderSetCmin(tup, cid) (void)NULL
 
 /* SetCmax must be used after HeapTupleHeaderAdjustCmax; see combocid.c */
-#define HeapTupleHeaderSetCmax(tup, cid, iscombo) \
-do { \
-	Assert(!((tup)->t_infomask & HEAP_MOVED)); \
-	(tup)->t_choice.t_heap.t_field3.t_cid = (cid); \
-	if (iscombo) \
-		(tup)->t_infomask |= HEAP_COMBOCID; \
-	else \
-		(tup)->t_infomask &= ~HEAP_COMBOCID; \
-} while (0)
+#define HeapTupleHeaderSetCmax(tup, cid, iscombo) (void)NULL
 
-#define HeapTupleHeaderGetXvac(tup) \
-( \
-	((tup)->t_infomask & HEAP_MOVED) ? \
-		(tup)->t_choice.t_heap.t_field3.t_xvac \
-	: \
-		InvalidTransactionId \
-)
+#define HeapTupleHeaderGetXvac(tup) InvalidTransactionId
 
-#define HeapTupleHeaderSetXvac(tup, xid) \
-do { \
-	Assert((tup)->t_infomask & HEAP_MOVED); \
-	(tup)->t_choice.t_heap.t_field3.t_xvac = (xid); \
-} while (0)
+#define HeapTupleHeaderSetXvac(tup, xid) (void)NULL
 
-#define HeapTupleHeaderGetDatumLength(tup) \
-	VARSIZE(tup)
+#define HeapTupleHeaderGetDatumLength(tup) TUPLESIZE
 
-#define HeapTupleHeaderSetDatumLength(tup, len) \
-	SET_VARSIZE(tup, len)
+#define HeapTupleHeaderSetDatumLength(tup, len) (void)NULL
 
-#define HeapTupleHeaderGetTypeId(tup) \
-( \
-	(tup)->t_choice.t_datum.datum_typeid \
-)
+#define HeapTupleHeaderGetTypeId(tup) 0
 
-#define HeapTupleHeaderSetTypeId(tup, typeid) \
-( \
-	(tup)->t_choice.t_datum.datum_typeid = (typeid) \
-)
+#define HeapTupleHeaderSetTypeId(tup, typeid) (void)NULL
 
-#define HeapTupleHeaderGetTypMod(tup) \
-( \
-	(tup)->t_choice.t_datum.datum_typmod \
-)
+#define HeapTupleHeaderGetTypMod(tup) 0
 
-#define HeapTupleHeaderSetTypMod(tup, typmod) \
-( \
-	(tup)->t_choice.t_datum.datum_typmod = (typmod) \
-)
+#define HeapTupleHeaderSetTypMod(tup, typmod) (void)NULL
 
-#define HeapTupleHeaderGetOid(tup) \
-( \
-	((tup)->t_infomask & HEAP_HASOID) ? \
-		*((Oid *) ((char *)(tup) + (tup)->t_hoff - sizeof(Oid))) \
-	: \
-		InvalidOid \
-)
+#define HeapTupleHeaderGetOid(tup) 0
 
-#define HeapTupleHeaderSetOid(tup, oid) \
-do { \
-	Assert((tup)->t_infomask & HEAP_HASOID); \
-	*((Oid *) ((char *)(tup) + (tup)->t_hoff - sizeof(Oid))) = (oid); \
-} while (0)
+#define HeapTupleHeaderSetOid(tup, oid) (void)NULL
 
 /*
  * Note that we stop considering a tuple HOT-updated as soon as it is known
@@ -321,60 +273,26 @@ do { \
  * efficiency, check tuple visibility before using this macro, so that the
  * INVALID bits will be as up to date as possible.
  */
-#define HeapTupleHeaderIsHotUpdated(tup) \
-( \
-	((tup)->t_infomask2 & HEAP_HOT_UPDATED) != 0 && \
-	((tup)->t_infomask & (HEAP_XMIN_INVALID | HEAP_XMAX_INVALID)) == 0 \
-)
+#define HeapTupleHeaderIsHotUpdated(tup) true
 
-#define HeapTupleHeaderSetHotUpdated(tup) \
-( \
-	(tup)->t_infomask2 |= HEAP_HOT_UPDATED \
-)
+#define HeapTupleHeaderSetHotUpdated(tup) (void)0
 
-#define HeapTupleHeaderClearHotUpdated(tup) \
-( \
-	(tup)->t_infomask2 &= ~HEAP_HOT_UPDATED \
-)
+#define HeapTupleHeaderClearHotUpdated(tup) (void)0
+#define HeapTupleHeaderIsHeapOnly(tup) true
 
-#define HeapTupleHeaderIsHeapOnly(tup) \
-( \
-  (tup)->t_infomask2 & HEAP_ONLY_TUPLE \
-)
+#define HeapTupleHeaderSetHeapOnly(tup)  (void)0
 
-#define HeapTupleHeaderSetHeapOnly(tup) \
-( \
-  (tup)->t_infomask2 |= HEAP_ONLY_TUPLE \
-)
+#define HeapTupleHeaderClearHeapOnly(tup) (void)0
 
-#define HeapTupleHeaderClearHeapOnly(tup) \
-( \
-  (tup)->t_infomask2 &= ~HEAP_ONLY_TUPLE \
-)
+#define HeapTupleHeaderHasMatch(tup) true
 
-#define HeapTupleHeaderHasMatch(tup) \
-( \
-  (tup)->t_infomask2 & HEAP_TUPLE_HAS_MATCH \
-)
+#define HeapTupleHeaderSetMatch(tup) (void)0
 
-#define HeapTupleHeaderSetMatch(tup) \
-( \
-  (tup)->t_infomask2 |= HEAP_TUPLE_HAS_MATCH \
-)
+#define HeapTupleHeaderClearMatch(tup) (void)0
 
-#define HeapTupleHeaderClearMatch(tup) \
-( \
-  (tup)->t_infomask2 &= ~HEAP_TUPLE_HAS_MATCH \
-)
+#define HeapTupleHeaderGetNatts(tup) NUMATTRS
 
-#define HeapTupleHeaderGetNatts(tup) \
-	((tup)->t_infomask2 & HEAP_NATTS_MASK)
-
-#define HeapTupleHeaderSetNatts(tup, natts) \
-( \
-	(tup)->t_infomask2 = ((tup)->t_infomask2 & ~HEAP_NATTS_MASK) | (natts) \
-)
-
+#define HeapTupleHeaderSetNatts(tup, natts) (void)0
 
 /*
  * BITMAPLEN(NATTS) -
@@ -516,12 +434,12 @@ typedef MinimalTupleData *MinimalTuple;
  */
 typedef struct HeapTupleData
 {
-	OffsetNumber t_index;        /* Index in the block for the tuple */
-	BlockNumber t_block;        /* Block in which the tuple is stored */      
+	// OffsetNumber t_index;        /* Index in the block for the tuple */
+	// BlockNumber t_block;        /* Block in which the tuple is stored */      
 	Oid			t_tableOid;		/* table the tuple came from */
-	HeapTupleHeader t_data;		/* -> tuple header and data */\
 	ItemPointerData t_self;		/* SelfItemPointer */
 	uint32		t_len;			/* length of *t_data */
+	HeapTupleStart t_data;		/* -> tuple header and data */
 } HeapTupleData;
 
 typedef HeapTupleData *HeapTuple;
@@ -531,51 +449,38 @@ typedef HeapTupleData *HeapTuple;
 /*
  * GETSTRUCT - given a HeapTuple pointer, return address of the user data
  */
-#define GETSTRUCT(TUP) ((char *) ((TUP)->t_data) + (TUP)->t_data->t_hoff)
+#define GETSTRUCT(TUP) ((char *) ((TUP)->t_data))
 
 /*
  * Accessor macros to be used with HeapTuple pointers.
  */
 #define HeapTupleIsValid(tuple) PointerIsValid(tuple)
 
-#define HeapTupleHasNulls(tuple) \
-		(((tuple)->t_data->t_infomask & HEAP_HASNULL) != 0)
+#define HeapTupleHasNulls(tuple) false
 
-#define HeapTupleNoNulls(tuple) \
-		(!((tuple)->t_data->t_infomask & HEAP_HASNULL))
+#define HeapTupleNoNulls(tuple) true
 
-#define HeapTupleHasVarWidth(tuple) \
-		(((tuple)->t_data->t_infomask & HEAP_HASVARWIDTH) != 0)
+#define HeapTupleHasVarWidth(tuple) false
 
-#define HeapTupleAllFixed(tuple) \
-		(!((tuple)->t_data->t_infomask & HEAP_HASVARWIDTH))
+#define HeapTupleAllFixed(tuple) true
 
-#define HeapTupleHasExternal(tuple) \
-		(((tuple)->t_data->t_infomask & HEAP_HASEXTERNAL) != 0)
+#define HeapTupleHasExternal(tuple) false
 
-#define HeapTupleIsHotUpdated(tuple) \
-		HeapTupleHeaderIsHotUpdated((tuple)->t_data)
+#define HeapTupleIsHotUpdated(tuple) false
 
-#define HeapTupleSetHotUpdated(tuple) \
-		HeapTupleHeaderSetHotUpdated((tuple)->t_data)
+#define HeapTupleSetHotUpdated(tuple) (void)NULL
 
-#define HeapTupleClearHotUpdated(tuple) \
-		HeapTupleHeaderClearHotUpdated((tuple)->t_data)
+#define HeapTupleClearHotUpdated(tuple) (void)NULL
 
-#define HeapTupleIsHeapOnly(tuple) \
-		HeapTupleHeaderIsHeapOnly((tuple)->t_data)
+#define HeapTupleIsHeapOnly(tuple) false
 
-#define HeapTupleSetHeapOnly(tuple) \
-		HeapTupleHeaderSetHeapOnly((tuple)->t_data)
+#define HeapTupleSetHeapOnly(tuple) (void)NULL
 
-#define HeapTupleClearHeapOnly(tuple) \
-		HeapTupleHeaderClearHeapOnly((tuple)->t_data)
+#define HeapTupleClearHeapOnly(tuple) (void)NULL
 
-#define HeapTupleGetOid(tuple) \
-		HeapTupleHeaderGetOid((tuple)->t_data)
+#define HeapTupleGetOid(tuple) 0
 
-#define HeapTupleSetOid(tuple, oid) \
-		HeapTupleHeaderSetOid((tuple)->t_data, (oid))
+#define HeapTupleSetOid(tuple, oid) (void)NULL
 
 
 /*
@@ -876,7 +781,7 @@ extern Datum fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 	( \
 		((attnum) > 0) ? \
 		( \
-			((attnum) > (int) HeapTupleHeaderGetNatts((tup)->t_data)) ? \
+			((attnum) > (int)NUMATTRS) ? \
 			( \
 				(*(isnull) = true), \
 				(Datum)NULL \

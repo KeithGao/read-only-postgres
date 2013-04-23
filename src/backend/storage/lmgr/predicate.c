@@ -4246,58 +4246,6 @@ void
 CheckForSerializableConflictIn(Relation relation, HeapTuple tuple,
 							   Buffer buffer)
 {
-	PREDICATELOCKTARGETTAG targettag;
-
-	if (!SerializationNeededForWrite(relation))
-		return;
-
-	/* Check if someone else has already decided that we need to die */
-	if (SxactIsDoomed(MySerializableXact))
-		ereport(ERROR,
-				(errcode(ERRCODE_T_R_SERIALIZATION_FAILURE),
-				 errmsg("could not serialize access due to read/write dependencies among transactions"),
-				 errdetail_internal("Reason code: Canceled on identification as a pivot, during conflict in checking."),
-				 errhint("The transaction might succeed if retried.")));
-
-	/*
-	 * We're doing a write which might cause rw-conflicts now or later.
-	 * Memorize that fact.
-	 */
-	MyXactDidWrite = true;
-
-	/*
-	 * It is important that we check for locks from the finest granularity to
-	 * the coarsest granularity, so that granularity promotion doesn't cause
-	 * us to miss a lock.  The new (coarser) lock will be acquired before the
-	 * old (finer) locks are released.
-	 *
-	 * It is not possible to take and hold a lock across the checks for all
-	 * granularities because each target could be in a separate partition.
-	 */
-	if (tuple != NULL)
-	{
-		SET_PREDICATELOCKTARGETTAG_TUPLE(targettag,
-										 relation->rd_node.dbNode,
-										 relation->rd_id,
-						 ItemPointerGetBlockNumber(&(tuple->t_data->t_ctid)),
-						ItemPointerGetOffsetNumber(&(tuple->t_data->t_ctid)),
-									  HeapTupleHeaderGetXmin(tuple->t_data));
-		CheckTargetForConflictsIn(&targettag);
-	}
-
-	if (BufferIsValid(buffer))
-	{
-		SET_PREDICATELOCKTARGETTAG_PAGE(targettag,
-										relation->rd_node.dbNode,
-										relation->rd_id,
-										BufferGetBlockNumber(buffer));
-		CheckTargetForConflictsIn(&targettag);
-	}
-
-	SET_PREDICATELOCKTARGETTAG_RELATION(targettag,
-										relation->rd_node.dbNode,
-										relation->rd_id);
-	CheckTargetForConflictsIn(&targettag);
 }
 
 /*
