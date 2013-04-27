@@ -58,6 +58,7 @@ static void parseNameAndArgTypes(const char *string, bool allowNone,
 Datum
 regprocin(PG_FUNCTION_ARGS)
 {
+	elog(DEBUG4, "We're checking a tuple");
 	char	   *pro_name_or_oid = PG_GETARG_CSTRING(0);
 	RegProcedure result = InvalidOid;
 	List	   *names;
@@ -104,6 +105,7 @@ regprocin(PG_FUNCTION_ARGS)
 
 		while (HeapTupleIsValid(tuple = systable_getnext(sysscan)))
 		{
+			elog(DEBUG4, "We're checking a tuple");
 			result = (RegProcedure) HeapTupleGetOid(tuple);
 			if (++matches > 1)
 				break;
@@ -154,6 +156,7 @@ regprocin(PG_FUNCTION_ARGS)
 Datum
 regprocout(PG_FUNCTION_ARGS)
 {
+	elog(DEBUG4, "regpreocout");
 	RegProcedure proid = PG_GETARG_OID(0);
 	char	   *result;
 	HeapTuple	proctup;
@@ -242,6 +245,7 @@ regprocsend(PG_FUNCTION_ARGS)
 Datum
 regprocedurein(PG_FUNCTION_ARGS)
 {
+	elog(DEBUG4, "regprocedurein");
 	char	   *pro_name_or_oid = PG_GETARG_CSTRING(0);
 	RegProcedure result = InvalidOid;
 	List	   *names;
