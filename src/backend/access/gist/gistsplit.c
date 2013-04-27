@@ -16,6 +16,7 @@
 
 #include "access/gist_private.h"
 #include "utils/rel.h"
+#include "access/htup.h"
 
 typedef struct
 {

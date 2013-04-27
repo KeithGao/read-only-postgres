@@ -595,8 +595,8 @@ toast_insert_or_update(Relation rel, HeapTuple newtup, HeapTuple oldtup,
 	hoff = offsetof(HeapTupleHeaderData, t_bits);
 	if (has_nulls)
 		hoff += BITMAPLEN(numAttrs);
-	if (newtup->t_data->t_infomask & HEAP_HASOID)
-		hoff += sizeof(Oid);
+	// if (newtup->t_data->t_infomask & HEAP_HASOID)
+	//	hoff += sizeof(Oid);
 	hoff = MAXALIGN(hoff);
 	/* now convert to a limit on the tuple data size */
 	maxDataLen = TOAST_TUPLE_TARGET - hoff;
@@ -1000,14 +1000,14 @@ toast_flatten_tuple(HeapTuple tup, TupleDesc tupleDesc)
 	new_tuple->t_self = tup->t_self;
 	new_tuple->t_tableOid = tup->t_tableOid;
 
-	new_tuple->t_data->t_choice = tup->t_data->t_choice;
-	new_tuple->t_data->t_ctid = tup->t_data->t_ctid;
-	new_tuple->t_data->t_infomask &= ~HEAP_XACT_MASK;
-	new_tuple->t_data->t_infomask |=
-		tup->t_data->t_infomask & HEAP_XACT_MASK;
-	new_tuple->t_data->t_infomask2 &= ~HEAP2_XACT_MASK;
-	new_tuple->t_data->t_infomask2 |=
-		tup->t_data->t_infomask2 & HEAP2_XACT_MASK;
+	// new_tuple->t_data->t_choice = tup->t_data->t_choice;
+	// new_tuple->t_data->t_ctid = tup->t_data->t_ctid;
+	// new_tuple->t_data->t_infomask &= ~HEAP_XACT_MASK;
+	// new_tuple->t_data->t_infomask |=
+	// 	tup->t_data->t_infomask & HEAP_XACT_MASK;
+	// new_tuple->t_data->t_infomask2 &= ~HEAP2_XACT_MASK;
+	// new_tuple->t_data->t_infomask2 |=
+	// 	tup->t_data->t_infomask2 & HEAP2_XACT_MASK;
 
 	/*
 	 * Free allocated temp values

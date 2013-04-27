@@ -25,9 +25,9 @@
 #define DISABLE_COMPLEX_MACRO true
 
 /* Fixed length tuple constants */
-#define TUPLESIZE 1024
+#define TUPLESIZE 2048
 #define ATTRSIZE 64
-#define NUMATTRS 16
+#define NUMATTRS 32
 
 /*
  * MaxTupleAttributeNumber limits the number of (user) columns in a tuple.
@@ -39,7 +39,7 @@
  * so that alterations in HeapTupleHeaderData layout won't change the
  * supported max number of columns.
  */
-#define MaxTupleAttributeNumber NUMATTRS	/* 8 * 208 */
+#define MaxTupleAttributeNumber 32	/* 8 * 208 */
 
 /*
  * MaxHeapAttributeNumber limits the number of (user) columns in a table.
@@ -53,7 +53,7 @@
  * into the disk-block-based limit on overall tuple size if you have more
  * than a thousand or so columns.  TOAST won't help.
  */
-#define MaxHeapAttributeNumber	NUMATTRS	/* 8 * 200 */
+#define MaxHeapAttributeNumber	32	/* 8 * 200 */
 
 /*
  * Heap tuple header.  To avoid wasting space, the fields should be

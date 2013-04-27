@@ -70,66 +70,7 @@ static void heap_prune_record_unused(PruneState *prstate, OffsetNumber offnum);
 void
 heap_page_prune_opt(Relation relation, Buffer buffer, TransactionId OldestXmin)
 {
-	Page		page = BufferGetPage(buffer);
-	Size		minfree;
-
-	/*
-	 * Let's see if we really need pruning.
-	 *
-	 * Forget it if page is not hinted to contain something prunable that's
-	 * older than OldestXmin.
-	 */
-	if (!PageIsPrunable(page, OldestXmin))
-		return;
-
-	/*
-	 * We can't write WAL in recovery mode, so there's no point trying to
-	 * clean the page. The master will likely issue a cleaning WAL record soon
-	 * anyway, so this is no particular loss.
-	 */
-	if (RecoveryInProgress())
-		return;
-
-	/*
-	 * We prune when a previous UPDATE failed to find enough space on the page
-	 * for a new tuple version, or when free space falls below the relation's
-	 * fill-factor target (but not less than 10%).
-	 *
-	 * Checking free space here is questionable since we aren't holding any
-	 * lock on the buffer; in the worst case we could get a bogus answer. It's
-	 * unlikely to be *seriously* wrong, though, since reading either pd_lower
-	 * or pd_upper is probably atomic.	Avoiding taking a lock seems more
-	 * important than sometimes getting a wrong answer in what is after all
-	 * just a heuristic estimate.
-	 */
-	minfree = RelationGetTargetPageFreeSpace(relation,
-											 HEAP_DEFAULT_FILLFACTOR);
-	minfree = Max(minfree, BLCKSZ / 10);
-
-	if (PageIsFull(page) || PageGetHeapFreeSpace(page) < minfree)
-	{
-		/* OK, try to get exclusive buffer lock */
-		if (!ConditionalLockBufferForCleanup(buffer))
-			return;
-
-		/*
-		 * Now that we have buffer lock, get accurate information about the
-		 * page's free space, and recheck the heuristic about whether to
-		 * prune. (We needn't recheck PageIsPrunable, since no one else could
-		 * have pruned while we hold pin.)
-		 */
-		if (PageIsFull(page) || PageGetHeapFreeSpace(page) < minfree)
-		{
-			TransactionId ignore = InvalidTransactionId;		/* return value not
-																 * needed */
-
-			/* OK to prune */
-			(void) heap_page_prune(relation, buffer, OldestXmin, true, &ignore);
-		}
-
-		/* And release buffer lock */
-		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
-	}
+	return;
 }
 
 

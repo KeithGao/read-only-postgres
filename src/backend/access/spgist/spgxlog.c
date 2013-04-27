@@ -17,6 +17,7 @@
 #include "access/spgist_private.h"
 #include "access/transam.h"
 #include "access/xlogutils.h"
+#include "access/htup.h"
 #include "storage/standby.h"
 #include "utils/memutils.h"
 

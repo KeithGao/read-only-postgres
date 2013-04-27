@@ -16,6 +16,7 @@
 #include "access/gist_private.h"
 #include "access/xlogutils.h"
 #include "utils/memutils.h"
+#include "access/htup.h"
 
 typedef struct
 {

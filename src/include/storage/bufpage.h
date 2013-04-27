@@ -18,7 +18,6 @@
 #include "storage/item.h"
 #include "storage/off.h"
 
-#define TUPLESIZE 4096
 /*
  * A postgres disk page is an abstraction layered on top of a postgres
  * disk block (which is simply a unit of i/o, see block.h).
@@ -326,20 +325,18 @@ XLogRecPtr NULLXLOGREC;
  */
 #define PageGetLSN(page) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!"))), \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now (GETLSN)!"))), \
 	NULLXLOGREC \
 )
-#define PageSetLSN(page, lsn) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!")))
+#define PageSetLSN(page, lsn) (void)NULL
 
 /* NOTE: only the 16 least significant bits are stored */
 #define PageGetTLI(page) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!"))), \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now (TLI)!"))), \
 	0  \
 )
-#define PageSetTLI(page, tli) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!")))
+#define PageSetTLI(page, tli) (void)NULL
 
 #define PageHasFreeLinePointers(page) !PageIsFull(page)
 
@@ -347,7 +344,10 @@ XLogRecPtr NULLXLOGREC;
 
 #define PageClearHasFreeLinePointers(page) (void)NULL
 
-#define PageIsFull(page) (page)->pd_lower >= (page)->pd_upper
+#define PageIsFull(page) \
+( \
+	((NewPageHeader)(page))->pd_lower >= ((NewPageHeader)(page))->pd_upper \
+)
 
 #define PageSetFull(page) (void)NULL
 

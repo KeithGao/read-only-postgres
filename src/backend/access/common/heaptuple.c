@@ -159,12 +159,9 @@ heap_fill_tuple(TupleDesc tupleDesc,
 	for (i = 0; i < numberOfAttributes; i++)
 	{
 		Size		data_length;
-		elog(DEBUG4, "Starting loop with i= %d", i);
 		if (isnull[i])
 		{
-			elog(DEBUG4, "Hack starting");
 			memcpy(data, nulls, ATTRSIZE);
-			elog(DEBUG4, "Hack ending");
 			continue;
 		}
 
@@ -180,7 +177,6 @@ heap_fill_tuple(TupleDesc tupleDesc,
 			/* pass-by-value */
 			// data = (char *) att_align_nominal(data, att[i]->attalign);
 			memcpy(data, nulls, ATTRSIZE - 1);
-			elog(DEBUG4, "wrote the nulls");
 			char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
 			memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
 
@@ -191,7 +187,6 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		{
 			elog(DEBUG4, "Variable length");
 			memcpy(data, nulls, ATTRSIZE);
-			elog(DEBUG4, "Wrote the nulls");
 			//ereport(DEBUG4, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
 			
 			/* varlena */
@@ -231,7 +226,7 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		else if (att[i]->attlen == -2)
 		{
 			elog(DEBUG4, "C string");
-			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
+			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now!")));
 			/* cstring ... never needs alignment */
 			// *infomask |= HEAP_HASVARWIDTH;
 			// Assert(att[i]->attalign == 'c');
@@ -247,16 +242,11 @@ heap_fill_tuple(TupleDesc tupleDesc,
 			Assert(att[i]->attlen > 0);
 			data_length = att[i]->attlen;
 			Assert(data_length <= ATTRSIZE);
-			elog(DEBUG4, "Values are nullsize: %d, datasize: %d", ATTRSIZE - data_length, data_length);
 			memcpy(data, nulls, ATTRSIZE - data_length);
-			elog(DEBUG4, "wrote the nulls");
 			memcpy(data + ATTRSIZE - data_length, DatumGetPointer(values[i]), data_length);
-			elog(DEBUG4, "fixlen ended");
 
 		}
-		elog(DEBUG4, "Adding data");
 		data += ATTRSIZE;
-		elog(DEBUG4, "Done adding data");
 	}
 
 	// Assert((data - start) >= data_size);

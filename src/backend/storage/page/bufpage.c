@@ -144,7 +144,6 @@ PageAddItem(Page page,
 	 * Select offsetNumber to place the new item at
 	 */
 	limit = OffsetNumberNext(PageGetMaxOffsetNumber(page));
-	offsetNumber = limit;
 
 	/* was offsetNumber passed in? */
 	if (OffsetNumberIsValid(offsetNumber)) {
@@ -169,11 +168,13 @@ PageAddItem(Page page,
 	lower = phdr->pd_lower;
 
 	// alignedSize = MAXALIGN(size);
-
+	int oldUpper = phdr->pd_upper;
 	upper = (int) phdr->pd_upper - TUPLESIZE;
 
-	if (lower > upper)
-		return InvalidOffsetNumber;
+	if (lower > upper) {
+		elog(DEBUG4, "lower > upper");
+		return limit;
+	}
 	elog(DEBUG4, "copying upper %d, size %d, blocksize %d", upper, TUPLESIZE, BLCKSZ);
 	/* copy the item's data onto the page */
 	memcpy((char *) page + upper, item, TUPLESIZE);
@@ -181,7 +182,7 @@ PageAddItem(Page page,
 	// phdr->pd_lower = (LocationIndex) lower;
 	phdr->pd_upper = (LocationIndex) upper;
 	elog(DEBUG4, "Done with my page add");
-	return offsetNumber;
+	return oldUpper ;
 }
 
 /*

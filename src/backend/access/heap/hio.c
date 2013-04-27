@@ -51,14 +51,12 @@ RelationPutHeapTuple(Relation relation,
 
 	if (offnum == InvalidOffsetNumber)
 		elog(PANIC, "failed to add tuple to page");
-
+	elog(DEBUG4, "About to set a pointer");
 	/* Update tuple->t_self to the actual position where it was stored */
 	ItemPointerSet(&(tuple->t_self), BufferGetBlockNumber(buffer), offnum);
 
-	/* Insert the correct position into CTID of the stored tuple, too */
-	itemId = PageGetItemId(pageHeader, offnum);
-	item = PageGetItem(pageHeader, itemId);
-	((HeapTupleHeader) item)->t_ctid = tuple->t_self;
+	elog(DEBUG4, "Done with relationPutHeapTuple");
+
 }
 
 /*

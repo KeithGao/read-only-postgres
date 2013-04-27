@@ -1599,6 +1599,7 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * into the relation; tup is the caller's original untoasted data.
 	 */
 	heaptup = heap_prepare_insert(relation, tup, xid, cid, options);
+	elog(DEBUG4, "Prepared insert");
 
 	/*
 	 * We're about to do the actual insert -- but check for conflict first, to
@@ -1624,15 +1625,16 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	START_CRIT_SECTION();
 
 	RelationPutHeapTuple(relation, buffer, heaptup);
+	elog(DEBUG4, "Put the tuple");
 
-	if (PageIsAllVisible(BufferGetPage(buffer)))
-	{
-		all_visible_cleared = true;
-		PageClearAllVisible(BufferGetPage(buffer));
-		visibilitymap_clear(relation,
-							ItemPointerGetBlockNumber(&(heaptup->t_self)),
-							vmbuffer);
-	}
+	// if (PageIsAllVisible(BufferGetPage(buffer)))
+	// {
+	// 	all_visible_cleared = true;
+	// 	PageClearAllVisible(BufferGetPage(buffer));
+	// 	visibilitymap_clear(relation,
+	// 						ItemPointerGetBlockNumber(&(heaptup->t_self)),
+	// 						vmbuffer);
+	// }
 
 	/*
 	 * XXX Should we set PageSetPrunable on this page ?
