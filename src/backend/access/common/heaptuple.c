@@ -276,12 +276,13 @@ heap_fill_tuple(TupleDesc tupleDesc,
 bool
 heap_attisnull(HeapTuple tup, int attnum)
 {
-	if (attnum >= 0)
-		return ((int32)(tup->t_data + attnum * ATTRSIZE)) == 0;
-	else {
-		elog(ERROR, "invalid attnum: %d", attnum);
-		return false;
-	}
+	return false;
+	//if (attnum >= 0)
+	//	return ((int32)(tup->t_data + attnum * ATTRSIZE)) == 0;
+	//else {
+	//	elog(ERROR, "invalid attnum: %d", attnum);
+	//	return false;
+	//}
 
 	// if (attnum > (int) HeapTupleHeaderGetNatts(tup->t_data))
 	// 	return true;
@@ -340,7 +341,7 @@ nocachegetattr(HeapTuple tuple,
 			   int attnum,
 			   TupleDesc tupleDesc)
 {
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")));
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now")));
 	return (Datum)0;
 
 // 	HeapTupleHeader tup = tuple->t_data;
@@ -554,6 +555,30 @@ heap_getsysattr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool *isnull)
 			/* pass-by-reference datatype */
 			result = PointerGetDatum(&(tup->t_self));
 			break;
+//		case ObjectIdAttributeNumber:
+//                result = ObjectIdGetDatum(HeapTupleGetOid(tup));
+//                break;
+//        case MinTransactionIdAttributeNumber:
+//                result = TransactionIdGetDatum(HeapTupleHeaderGetXmin(tup->t_data));
+//                break;
+//        case MaxTransactionIdAttributeNumber:
+//                result = TransactionIdGetDatum(HeapTupleHeaderGetXmax(tup->t_data));
+//                break;
+//        case MinCommandIdAttributeNumber:
+//        case MaxCommandIdAttributeNumber:
+//
+//                /*
+//                 * cmin and cmax are now both aliases for the same field, which
+//                 * can in fact also be a combo command id.      XXX perhaps we should
+//                 * return the "real" cmin or cmax if possible, that is if we are
+//                 * inside the originating transaction?
+//                 */
+//                result = CommandIdGetDatum(HeapTupleHeaderGetRawCommandId(tup->t_data));
+//                break;
+//        case TableOidAttributeNumber:
+//                result = ObjectIdGetDatum(tup->t_tableOid);
+//                      break;
+
 		default:
 			elog(ERROR, "invalid attnum: %d", attnum);
 			result = 0;			/* keep compiler quiet */
