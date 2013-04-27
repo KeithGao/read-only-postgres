@@ -25,9 +25,9 @@
 #define DISABLE_COMPLEX_MACRO true
 
 /* Fixed length tuple constants */
-#define TUPLESIZE 4096
-#define ATTRSIZE 32
-#define NUMATTRS 128
+#define TUPLESIZE 1024
+#define ATTRSIZE 64
+#define NUMATTRS 16
 
 /*
  * MaxTupleAttributeNumber limits the number of (user) columns in a tuple.
@@ -39,7 +39,7 @@
  * so that alterations in HeapTupleHeaderData layout won't change the
  * supported max number of columns.
  */
-#define MaxTupleAttributeNumber 128	/* 8 * 208 */
+#define MaxTupleAttributeNumber NUMATTRS	/* 8 * 208 */
 
 /*
  * MaxHeapAttributeNumber limits the number of (user) columns in a table.
@@ -53,7 +53,7 @@
  * into the disk-block-based limit on overall tuple size if you have more
  * than a thousand or so columns.  TOAST won't help.
  */
-#define MaxHeapAttributeNumber	128	/* 8 * 200 */
+#define MaxHeapAttributeNumber	NUMATTRS	/* 8 * 200 */
 
 /*
  * Heap tuple header.  To avoid wasting space, the fields should be
@@ -263,10 +263,15 @@ typedef Pointer HeapTupleStart;
 
 #define HeapTupleHeaderSetTypMod(tup, typmod) (void)NULL
 
-#define HeapTupleHeaderGetOid(tup) 0
+#define HeapTupleHeaderGetOid(tup) \
+( \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("I don't have an oid to give you"))), 0 \
+)
 
-#define HeapTupleHeaderSetOid(tup, oid) (void)NULL
-
+#define HeapTupleHeaderSetOid(tup, oid)  \
+( \
+	ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("I can't set oid"))) \
+)
 /*
  * Note that we stop considering a tuple HOT-updated as soon as it is known
  * aborted or the would-be updating transaction is known aborted.  For best
@@ -478,7 +483,8 @@ typedef HeapTupleData *HeapTuple;
 
 #define HeapTupleClearHeapOnly(tuple) (void)NULL
 
-#define HeapTupleGetOid(tuple) 0
+#define HeapTupleGetOid(tuple) \
+ 	(ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We don't store Oids"))), 0)
 
 #define HeapTupleSetOid(tuple, oid) (void)NULL
 

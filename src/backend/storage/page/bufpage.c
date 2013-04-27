@@ -29,6 +29,7 @@
 void
 PageInit(Page page, Size pageSize, Size specialSize)
 {
+	elog(DEBUG4, "Starting page init");
 	NewPageHeader	p = (NewPageHeader) page;
 
 	specialSize = MAXALIGN(specialSize);
@@ -41,9 +42,10 @@ PageInit(Page page, Size pageSize, Size specialSize)
 
 	/* p->pd_flags = 0;								done by above MemSet */
 	p->pd_lower = SizeOfPageHeaderData;
-	p->pd_upper = pageSize - specialSize;
+	p->pd_upper = pageSize;
 	PageSetPageSizeAndVersion(page, pageSize, PG_PAGE_LAYOUT_VERSION);
 	/* p->pd_prune_xid = InvalidTransactionId;		done by above MemSet */
+	elog(DEBUG4, "p->lower: %u, p->upper: %u", p->pd_lower, p->pd_upper);
 }
 
 
@@ -117,7 +119,7 @@ PageAddItem(Page page,
 			bool overwrite,
 			bool is_heap)
 {
-	PageHeader	phdr = (PageHeader) page;
+	NewPageHeader	phdr = (NewPageHeader) page;
 	Size		alignedSize;
 	int			lower;
 	int			upper;
@@ -125,15 +127,18 @@ PageAddItem(Page page,
 	OffsetNumber limit;
 	bool		needshuffle = false;
 
+	elog(DEBUG4, "In page add item");
+
 	/*
 	 * Be wary about corrupted page pointers
 	 */
+
 	if (phdr->pd_lower < SizeOfPageHeaderData ||
 		phdr->pd_lower > phdr->pd_upper)
 		ereport(PANIC,
 				(errcode(ERRCODE_DATA_CORRUPTED),
 				 errmsg("corrupted page pointers: lower = %u, upper = %u, special = %u",
-						phdr->pd_lower, phdr->pd_upper, phdr->pd_special)));
+						phdr->pd_lower, phdr->pd_upper, 0)));
 
 	/*
 	 * Select offsetNumber to place the new item at
@@ -143,41 +148,39 @@ PageAddItem(Page page,
 
 	/* was offsetNumber passed in? */
 	if (OffsetNumberIsValid(offsetNumber)) {
-		ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Can't modify item: read only bitch!")));
+		ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("Can't modify item: read only.")));
 		return InvalidOffsetNumber;
 	}
 
-	if (is_heap && offsetNumber > MaxHeapTuplesPerPage)
+	if (is_heap && offsetNumber > TUPLESIZE * MaxHeapTuplesPerPage)
 	{
+		elog(DEBUG4, "offset: %d, maxtuples: %d", offsetNumber, MaxHeapTuplesPerPage);
 		elog(WARNING, "can't put more than MaxHeapTuplesPerPage items in a heap page");
 		return InvalidOffsetNumber;
 	}
 
+	elog(DEBUG4, "computing new uppers and lowers");
 	/*
 	 * Compute new lower and upper pointers for page, see if it'll fit.
 	 *
 	 * Note: do arithmetic as signed ints, to avoid mistakes if, say,
 	 * alignedSize > pd_upper.
 	 */
-	if (offsetNumber == limit || needshuffle)
-		lower = phdr->pd_lower + sizeof(ItemIdData);
-	else
-		lower = phdr->pd_lower;
+	lower = phdr->pd_lower;
 
-	alignedSize = MAXALIGN(size);
+	// alignedSize = MAXALIGN(size);
 
-	upper = (int) phdr->pd_upper - (int) alignedSize;
+	upper = (int) phdr->pd_upper - TUPLESIZE;
 
 	if (lower > upper)
 		return InvalidOffsetNumber;
-
+	elog(DEBUG4, "copying upper %d, size %d, blocksize %d", upper, TUPLESIZE, BLCKSZ);
 	/* copy the item's data onto the page */
-	memcpy((char *) page + upper, item, size);
-
+	memcpy((char *) page + upper, item, TUPLESIZE);
 	/* adjust page header */
-	phdr->pd_lower = (LocationIndex) lower;
+	// phdr->pd_lower = (LocationIndex) lower;
 	phdr->pd_upper = (LocationIndex) upper;
-
+	elog(DEBUG4, "Done with my page add");
 	return offsetNumber;
 }
 

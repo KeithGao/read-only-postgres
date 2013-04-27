@@ -216,7 +216,7 @@ typedef PageHeaderData *PageHeader;
  *		Returns an item identifier of a page.
  */
 #define PageGetItemId(page, offsetNumber) \
-	((ItemId) (&((PageHeader) (page))->pd_linp[((offsetNumber) - 1) * TUPLESIZE]))
+	((ItemId) (&((NewPageHeader) (page))->pd_linp[((offsetNumber) - 1) * TUPLESIZE]))
 
 /*
  * PageGetContents
@@ -288,7 +288,7 @@ typedef PageHeaderData *PageHeader;
  */
 #define PageGetSpecialPointer(page) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We don't do special pointers"))), \
 	(Pointer)0  \
 )
 
@@ -302,8 +302,9 @@ typedef PageHeaderData *PageHeader;
  */
 #define PageGetItem(page, itemId) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
-	(Pointer)0  \
+	AssertMacro(PageIsValid(page)), \
+	AssertMacro(ItemIdHasStorage(itemId)), \
+	(Item)(((char *)(page)) + ItemIdGetOffset(itemId)) \
 )
 
 
@@ -317,10 +318,7 @@ typedef PageHeaderData *PageHeader;
  *		return zero to ensure sane behavior.  Accept double evaluation
  *		of the argument so that we can ensure this.
  */
-#define PageGetMaxOffsetNumber(page) \
-	(((NewPageHeader) (page))->pd_lower <= SizeOfPageHeaderData ? 0 : \
-	 ((((NewPageHeader) (page))->pd_lower - SizeOfPageHeaderData) \
-	  / sizeof(ItemIdData)))
+#define PageGetMaxOffsetNumber(page) (((NewPageHeader)(page))->pd_upper - ((NewPageHeader)(page))->pd_lower / TUPLESIZE)
 
 XLogRecPtr NULLXLOGREC;
 /*
@@ -328,60 +326,44 @@ XLogRecPtr NULLXLOGREC;
  */
 #define PageGetLSN(page) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!"))), \
 	NULLXLOGREC \
 )
-#define PageSetLSN(page, lsn) ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+#define PageSetLSN(page, lsn) \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!")))
 
 /* NOTE: only the 16 least significant bits are stored */
 #define PageGetTLI(page) \
 ( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!"))), \
 	0  \
 )
 #define PageSetTLI(page, tli) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now!")))
 
-#define PageHasFreeLinePointers(page) \
-( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
-	0  \
-)
-#define PageSetHasFreeLinePointers(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
-#define PageClearHasFreeLinePointers(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+#define PageHasFreeLinePointers(page) !PageIsFull(page)
 
-#define PageIsFull(page)  \
-( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
-	0  \
-)
-#define PageSetFull(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
-#define PageClearFull(page)  \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+#define PageSetHasFreeLinePointers(page) (void)NULL
 
-#define PageIsAllVisible(page) \
-( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
-	0  \
-)
-#define PageSetAllVisible(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
-#define PageClearAllVisible(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+#define PageClearHasFreeLinePointers(page) (void)NULL
 
-#define PageIsPrunable(page, oldestxmin) \
-( \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!"))), \
-	0  \
-)
-#define PageSetPrunable(page, xid) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
-#define PageClearPrunable(page) \
-	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We're read only now, bitch!")))
+#define PageIsFull(page) (page)->pd_lower >= (page)->pd_upper
 
+#define PageSetFull(page) (void)NULL
+
+#define PageClearFull(page) (void)NULL
+
+#define PageIsAllVisible(page) true
+
+#define PageSetAllVisible(page) (void)NULL
+
+#define PageClearAllVisible(page) (void)NULL
+
+#define PageIsPrunable(page, oldestxmin) false
+
+#define PageSetPrunable(page, xid) (void)NULL
+
+#define PageClearPrunable(page) (void)NULL
 
 /* ----------------------------------------------------------------
  *		extern declarations

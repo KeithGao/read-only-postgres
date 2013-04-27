@@ -1589,6 +1589,8 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	Buffer		vmbuffer = InvalidBuffer;
 	bool		all_visible_cleared = false;
 
+	elog(DEBUG4, "Heap inserting");
+
 	/*
 	 * Fill in tuple header fields, assign an OID, and toast the tuple if
 	 * necessary.
@@ -1643,10 +1645,10 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	 * If you do add PageSetPrunable here, add it in heap_xlog_insert too.
 	 */
 
-	MarkBufferDirty(buffer);
+	// MarkBufferDirty(buffer);
 
 	/* XLOG stuff */
-	if (!(options & HEAP_INSERT_SKIP_WAL) && RelationNeedsWAL(relation))
+	if (false && !(options & HEAP_INSERT_SKIP_WAL) && RelationNeedsWAL(relation))
 	{
 		xl_heap_insert xlrec;
 		xl_heap_header xlhdr;
@@ -1743,6 +1745,7 @@ static HeapTuple
 heap_prepare_insert(Relation relation, HeapTuple tup, TransactionId xid,
 					CommandId cid, int options)
 {
+	tup->t_tableOid = RelationGetRelid(relation);
 	return tup;
 }
 
@@ -1978,6 +1981,7 @@ heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 Oid
 simple_heap_insert(Relation relation, HeapTuple tup)
 {
+	elog(DEBUG4, "Simple heap insert");
 	return heap_insert(relation, tup, GetCurrentCommandId(true), 0, NULL);
 }
 
@@ -3137,6 +3141,8 @@ heap_xlog_insert(XLogRecPtr lsn, XLogRecord *record)
 	Size		freespace;
 	BlockNumber blkno;
 
+	elog(DEBUG4, "Gone through xlog");
+
 	blkno = ItemPointerGetBlockNumber(&(xlrec->target.tid));
 
 	/*
@@ -3256,6 +3262,7 @@ heap_xlog_multi_insert(XLogRecPtr lsn, XLogRecord *record)
 	int			i;
 	bool		isinit = (record->xl_info & XLOG_HEAP_INIT_PAGE) != 0;
 
+	elog(DEBUG4, "multi insert");
 	/*
 	 * Insertion doesn't overwrite MVCC data, so no conflict processing is
 	 * required.

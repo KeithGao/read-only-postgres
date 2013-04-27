@@ -55,14 +55,13 @@
  *-------------------------------------------------------------------------
  */
 
- /* THIS FILE NEEDS SO MANY MODIFICATIONS. WE SHOULD CHANGE THE FORMAT FIRST THOUGH */
-
 #include "postgres.h"
 
 #include "access/sysattr.h"
 #include "access/tuptoaster.h"
 #include "executor/tuptable.h"
 #include "access/heapam.h"
+#include "access/htup.h"
 
 /* Does att's datatype allow packing into the 1-byte-header varlena format? */
 #define ATT_IS_PACKABLE(att) \
@@ -144,49 +143,31 @@ heap_fill_tuple(TupleDesc tupleDesc,
 	int			numberOfAttributes = tupleDesc->natts;
 	Form_pg_attribute *att = tupleDesc->attrs;
 
+	char nulls[ATTRSIZE];
+	int counthing;
+	for (counthing = 0; counthing < ATTRSIZE; counthing++)
+		nulls[counthing] = 0;
+
 #ifdef USE_ASSERT_CHECKING
 	char	   *start = data;
 #endif
 
+	elog(DEBUG4, "filling up the tuple");
+
 	Assert(numberOfAttributes <= NUMATTRS);
-
-	if (bit != NULL)
-	{
-		bitP = &bit[-1];
-		bitmask = HIGHBIT;
-	}
-	else
-	{
-		/* just to keep compiler quiet */
-		bitP = NULL;
-		bitmask = 0;
-	}
-
-	*infomask &= ~(HEAP_HASNULL | HEAP_HASVARWIDTH | HEAP_HASEXTERNAL);
 
 	for (i = 0; i < numberOfAttributes; i++)
 	{
 		Size		data_length;
-
-		if (bit != NULL)
+		elog(DEBUG4, "Starting loop with i= %d", i);
+		if (isnull[i])
 		{
-			if (bitmask != HIGHBIT)
-				bitmask <<= 1;
-			else
-			{
-				bitP += 1;
-				*bitP = 0x0;
-				bitmask = 1;
-			}
-
-			if (isnull[i])
-			{
-				*infomask |= HEAP_HASNULL;
-				continue;
-			}
-
-			*bitP |= bitmask;
+			elog(DEBUG4, "Hack starting");
+			memcpy(data, nulls, ATTRSIZE);
+			elog(DEBUG4, "Hack ending");
+			continue;
 		}
+
 
 		/*
 		 * XXX we use the att_align macros on the pointer value itself, not on
@@ -195,14 +176,23 @@ heap_fill_tuple(TupleDesc tupleDesc,
 
 		if (att[i]->attbyval)
 		{
+			elog(DEBUG4, "By value");
 			/* pass-by-value */
-			data = (char *) att_align_nominal(data, att[i]->attalign);
-			store_att_byval(data, values[i], ATTRSIZE);
+			// data = (char *) att_align_nominal(data, att[i]->attalign);
+			memcpy(data, nulls, ATTRSIZE - 1);
+			elog(DEBUG4, "wrote the nulls");
+			char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
+			memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
+
+			// store_att_byval(data, values[i], att[i]->attlen);
 			data_length = ATTRSIZE;
 		}
 		else if (att[i]->attlen == -1)
 		{
-			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
+			elog(DEBUG4, "Variable length");
+			memcpy(data, nulls, ATTRSIZE);
+			elog(DEBUG4, "Wrote the nulls");
+			//ereport(DEBUG4, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
 			
 			/* varlena */
 			// Pointer		val = DatumGetPointer(values[i]);
@@ -240,6 +230,7 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		}
 		else if (att[i]->attlen == -2)
 		{
+			elog(DEBUG4, "C string");
 			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
 			/* cstring ... never needs alignment */
 			// *infomask |= HEAP_HASVARWIDTH;
@@ -249,17 +240,27 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		}
 		else
 		{
-			/* fixed-length pass-by-reference */
-			data = (char *) att_align_nominal(data, att[i]->attalign);
-			Assert(att[i]->attlen > 0);
-			data_length = ATTRSIZE;
-			memcpy(data, DatumGetPointer(values[i]), data_length);
-		}
 
-		data += data_length;
+			elog(DEBUG4, "fixlen");
+			/* fixed-length pass-by-reference */
+			// data = (char *) att_align_nominal(data, att[i]->attalign);
+			Assert(att[i]->attlen > 0);
+			data_length = att[i]->attlen;
+			Assert(data_length <= ATTRSIZE);
+			elog(DEBUG4, "Values are nullsize: %d, datasize: %d", ATTRSIZE - data_length, data_length);
+			memcpy(data, nulls, ATTRSIZE - data_length);
+			elog(DEBUG4, "wrote the nulls");
+			memcpy(data + ATTRSIZE - data_length, DatumGetPointer(values[i]), data_length);
+			elog(DEBUG4, "fixlen ended");
+
+		}
+		elog(DEBUG4, "Adding data");
+		data += ATTRSIZE;
+		elog(DEBUG4, "Done adding data");
 	}
 
-	Assert((data - start) >= data_size);
+	// Assert((data - start) >= data_size);
+	elog(DEBUG4, "Done with filling");
 }
 
 
@@ -632,6 +633,8 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	int			numberOfAttributes = tupleDescriptor->natts;
 	int			i;
 
+	elog(DEBUG4, "heap form tuple");
+
 	if (numberOfAttributes > MaxTupleAttributeNumber)
 		ereport(ERROR,
 				(errcode(ERRCODE_TOO_MANY_COLUMNS),
@@ -663,30 +666,20 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 													  att[i]->atttypmod);
 		}
 	}
-
+	elog(DEBUG4, "past the beast");
 	/*
 	 * Determine total space needed
 	 */
-	len = offsetof(HeapTupleHeaderData, t_bits);
-
-	if (hasnull)
-		len += BITMAPLEN(numberOfAttributes);
-
-	if (tupleDescriptor->tdhasoid)
-		len += sizeof(Oid);
-
-	hoff = len = MAXALIGN(len); /* align user data safely */
-
-	data_len = heap_compute_data_size(tupleDescriptor, values, isnull);
-
-	len = TUPLESIZE;
-
+	 len = TUPLESIZE;
+	 
 	/*
 	 * Allocate and zero the space needed.	Note that the tuple body and
 	 * HeapTupleData management structure are allocated in one chunk.
 	 */
 	tuple = (HeapTuple) palloc0(HEAPTUPLESIZE + len);
 	tuple->t_data = td = (HeapTupleStart) ((char *) tuple + HEAPTUPLESIZE);
+
+	elog(DEBUG4, "made the tuple");
 
 	/*
 	 * And fill in the information.  Note we fill the Datum fields even though
@@ -703,6 +696,8 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 
 	// if (tupleDescriptor->tdhasoid)		/* else leave infomask = 0 */
 	//	td->t_infomask = HEAP_HASOID;
+	
+	elog(DEBUG4, "about to fill");
 
 	heap_fill_tuple(tupleDescriptor,
 					values,
@@ -711,6 +706,8 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 					data_len,
 					(uint16)0,
 					NULL);
+
+	elog(DEBUG4, "end of heap form tuple");
 
 	return tuple;
 }

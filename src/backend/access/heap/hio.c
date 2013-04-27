@@ -41,6 +41,8 @@ RelationPutHeapTuple(Relation relation,
 	ItemId		itemId;
 	Item		item;
 
+	elog(DEBUG4, "Relation");
+
 	/* Add the tuple to the page */
 	pageHeader = BufferGetPage(buffer);
 

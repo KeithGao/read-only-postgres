@@ -784,6 +784,7 @@ DefineAttr(char *name, char *type, int attnum)
 void
 InsertOneTuple(Oid objectid)
 {
+	elog(DEBUG4, "Inserting one tuple");
 	HeapTuple	tuple;
 	TupleDesc	tupDesc;
 	int			i;
@@ -799,6 +800,7 @@ InsertOneTuple(Oid objectid)
 	pfree(tupDesc);				/* just free's tupDesc, not the attrtypes */
 
 	simple_heap_insert(boot_reldesc, tuple);
+	elog(DEBUG4, "Inserted a tuple");
 	heap_freetuple(tuple);
 	elog(DEBUG4, "row inserted");
 
