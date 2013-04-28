@@ -268,6 +268,7 @@ systable_beginscan(Relation heapRelation,
 	if (irel)
 	{
 		int			i;
+		elog(DEBUG4, "BNot using a heap scan");
 
 		/* Change attribute numbers to be index column numbers. */
 		for (i = 0; i < nkeys; i++)
@@ -293,6 +294,7 @@ systable_beginscan(Relation heapRelation,
 	}
 	else
 	{
+		elog(DEBUG4, "Using a heap scan");
 		/*
 		 * We disallow synchronized scans when forced to use a heapscan on a
 		 * catalog.  In most cases the desired rows are near the front, so

@@ -213,6 +213,8 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 	ItemId		lpp;
 	bool		all_visible;
 
+	elog(DEBUG4, "Doing a heapgetpage");
+
 	Assert(page < scan->rs_nblocks);
 
 	/* release previous scan buffer, if any */
@@ -233,6 +235,11 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 	scan->rs_cbuf = ReadBufferExtended(scan->rs_rd, MAIN_FORKNUM, page,
 									   RBM_NORMAL, scan->rs_strategy);
 	scan->rs_cblock = page;
+
+	if (!scan->rs_pageatatime)
+		return;
+
+	scan->rs_ntuples = MaxHeapTuplesPerPage;
 }
 
 /* ----------------
@@ -289,11 +296,13 @@ heapgettup(HeapScanDesc scan,
 	{
 		if (!scan->rs_inited)
 		{
+			elog(DEBUG4, "Initted");
 			/*
 			 * return null immediately if relation is empty
 			 */
 			if (scan->rs_nblocks == 0)
 			{
+				elog(DEBUG4, "Relation is empty");
 				Assert(!BufferIsValid(scan->rs_cbuf));
 				tuple->t_data = NULL;
 				return;
@@ -306,9 +315,12 @@ heapgettup(HeapScanDesc scan,
 		else
 		{
 			/* continue from previously returned page/tuple */
+			elog(DEBUG4, "Prev returned");
 			page = scan->rs_cblock;		/* current page */
 			tupleidx = OffsetNumberNext(ItemPointerGetOffsetNumber(&(tuple->t_self)));
 		}
+
+		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
 		lines = PageGetMaxOffsetNumber(dp);
@@ -319,11 +331,13 @@ heapgettup(HeapScanDesc scan,
 	{
 		if (!scan->rs_inited)
 		{
+			elog(DEBUG4, "Back scan not initted");
 			/*
 			 * return null immediately if relation is empty
 			 */
 			if (scan->rs_nblocks == 0)
 			{
+				elog(DEBUG4, "Relation is empty backwards");
 				Assert(!BufferIsValid(scan->rs_cbuf));
 				tuple->t_data = NULL;
 				return;
@@ -345,10 +359,12 @@ heapgettup(HeapScanDesc scan,
 		}
 		else
 		{
+			elog(DEBUG4, "Prev page");
 			/* continue from previously returned page/tuple */
 			page = scan->rs_cblock;		/* current page */
 		}
 
+		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
 		lines = PageGetMaxOffsetNumber(dp);
@@ -367,6 +383,7 @@ heapgettup(HeapScanDesc scan,
 	}
 	else
 	{
+		elog(DEBUG4, "No movement");
 		/*
 		 * ``no movement'' scan direction: refetch prior tuple
 		 */
@@ -384,41 +401,66 @@ heapgettup(HeapScanDesc scan,
 		/* Since the tuple was previously fetched, needn't lock page here */
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
 		tupleidx = ItemPointerGetOffsetNumber(&(tuple->t_self));
-		lpp = PageGetItemId(dp, tupleidx);
-		Assert(ItemIdIsNormal(lpp));
-		tuple->t_data = (HeapTupleHeader) PageGetItem((Page) dp, lpp);
-
+		// Assert(ItemIdIsNormal(lpp));
+		tuple->t_data = (HeapTupleHeader) PageGetItemIdx((Page) dp, tupleidx);
+		tuple->t_len = TUPLESIZE;
 		return;
 	}
+
+	// Print dp and fail out
+
+	// Pointer dpptr = ((NewPageHeader)dp)->pd_linp + sizeof(HeapTupleStartData);
+	// int colidx = 0;
+	// int theidx = 0;
+	// int failer;
+	// elog(DEBUG4, "BLCKSZ: %d, Header size: %d", BLCKSZ), sizeof(HeapTupleStartData);
+	// while (dpptr < dp + BLCKSZ) {
+	// 	failer++;
+	// 	if (failer > 10000) elog(PANIC, "stopping");
+	// 	if (theidx >= TUPLESIZE) {
+	// 		theidx = 0;
+	// 		colidx++;
+	// 		dpptr += sizeof(HeapTupleStartData);
+	// 	}
+	// 	elog(DEBUG4, "zebyte %c at tuple: %d, idx: %d", *dpptr, colidx, theidx);
+	// 	theidx++;
+	// 	dpptr++;
+	// }
+
+	// elog(PANIC, "end of page");
+
 
 	/*
 	 * advance the scan until we find a qualifying tuple or run out of stuff
 	 * to scan
 	 */
-	lpp = PageGetItemId(dp, tupleidx);
+	// lpp = PageGetItemId(dp, tupleidx);
 	for (;;)
 	{
 		while (linesleft > 0)
 		{
-			if (ItemIdIsNormal(lpp))
-			{
-				bool		valid;
-				tuple->t_data = (HeapTupleStart) PageGetItem((Page) dp, lpp);
-				tuple->t_len = ItemIdGetLength(lpp);
-				ItemPointerSet(&(tuple->t_self), page, tupleidx);
+			bool		valid;
+			tuple->t_data = (HeapTupleStart) PageGetItemIdx((Page) dp, tupleidx);
+			tuple->t_len = TUPLESIZE;
+			elog(DEBUG4, "Testing item %p", tuple->t_data);
+			// WE USED TO ALWAYS TEST EXACTLY THE SAME ITEM
+			// PAGE GET ITEM IS AT FAULT (or lpp)
+			ItemPointerSet(&(tuple->t_self), page, tupleidx);
 
-				/*
-				 * if current tuple qualifies, return it.
-				 */
-				
-				valid = true;
+			/*
+			 * if current tuple qualifies, return it.
+			 */
+			
+			valid = true;
 
-				if (key != NULL)
-					HeapKeyTest(tuple, RelationGetDescr(scan->rs_rd),
-								nkeys, key, valid);
-
-				if (valid) return;
+			if (key != NULL) {
+				HeapKeyTest(tuple, RelationGetDescr(scan->rs_rd),
+							nkeys, key, valid);
+			} else {
+				elog(DEBUG4, "Key is null");
 			}
+
+			if (valid) return;
 
 			 /*
 			 * otherwise move to the next item on the page
@@ -426,12 +468,10 @@ heapgettup(HeapScanDesc scan,
 			 --linesleft;
 			 if (backward)
 			 {
-			 --lpp;	/* move back in this page's ItemId array */
 			 --tupleidx;
 			 }
 			 else
 			 {
-			 ++lpp;	/* move forward in this page's ItemId array */
 			 ++tupleidx;
 			 }
 		}
@@ -479,6 +519,7 @@ heapgettup(HeapScanDesc scan,
 		 */
 		if (finished)
 		{
+			elog(DEBUG4, "We looked everywhere");
 			if (BufferIsValid(scan->rs_cbuf))
 				ReleaseBuffer(scan->rs_cbuf);
 			scan->rs_cbuf = InvalidBuffer;
@@ -488,6 +529,7 @@ heapgettup(HeapScanDesc scan,
 			return;
 		}
 
+		elog(DEBUG4, "We're at the end of the func");
 		heapgetpage(scan, page);
 
 		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
@@ -498,12 +540,10 @@ heapgettup(HeapScanDesc scan,
 		if (backward)
 		{
 			tupleidx = lines;
-			lpp = PageGetItemId(dp, lines);
 		}
 		else
 		{
 			tupleidx = FirstOffsetNumber;
-			lpp = PageGetItemId(dp, FirstOffsetNumber);
 		}
 	}
 }
@@ -540,15 +580,25 @@ Datum
 fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 			bool *isnull)
 {
+	elog(DEBUG4, "Fasting getting");
 	if (attnum > 0) {
 		if (heap_attisnull(tup, attnum)) {
 			*isnull = true;
+			elog(DEBUG4, "It's null");
 			return (Datum)NULL;
 		} else {
 			*isnull = false;
-			return fetchatt(tupleDesc->attrs[attnum - 1], tup->t_data);
+			elog(DEBUG4, "Doing a fetch for attribute %d", attnum);
+
+			int __count;
+			for (__count = 0; __count < ATTRSIZE; __count++) {
+				elog(DEBUG4, "fetching byte %c", *(tup->t_data + sizeof(HeapTupleStartData) + (attnum -1) * ATTRSIZE + __count));
+			}
+			return fetchatt(tupleDesc->attrs[attnum - 1], tup->t_data + sizeof(HeapTupleStartData));
 		}
 	}
+	elog(DEBUG4, "Attnum is 0");
+	return (Datum)NULL;
 }
 #endif   /* defined(DISABLE_COMPLEX_MACRO) */
 
@@ -1010,6 +1060,7 @@ HeapTuple
 heap_getnext(HeapScanDesc scan, ScanDirection direction)
 {
 	/* Note: no locking manipulations needed */
+	elog(DEBUG4, "Starting to get next");
 
 	HEAPDEBUG_1;				/* heap_getnext( info ) */
 
@@ -1019,8 +1070,10 @@ heap_getnext(HeapScanDesc scan, ScanDirection direction)
 	else
 		heapgettup(scan, direction, scan->rs_nkeys, scan->rs_key);
 
+	elog(DEBUG4, "going to returning heap tuple");
 	if (scan->rs_ctup.t_data == NULL)
 	{
+		elog(DEBUG4, "cant return heap tuple");		
 		HEAPDEBUG_2;			/* heap_getnext returning EOS */
 		return NULL;
 	}
@@ -1032,7 +1085,8 @@ heap_getnext(HeapScanDesc scan, ScanDirection direction)
 	HEAPDEBUG_3;				/* heap_getnext returning tuple */
 
 	pgstat_count_heap_getnext(scan->rs_rd);
-
+	elog(DEBUG4, "Returning rsctup %p", &(scan->rs_ctup));
+	Assert(HeapTupleIsValid(&(scan->rs_ctup)));
 	return &(scan->rs_ctup);
 }
 
@@ -1122,30 +1176,13 @@ heap_fetch(Relation relation,
 	/*
 	 * get the item line pointer corresponding to the requested tid
 	 */
-	lp = PageGetItemId(page, offnum);
-
-	/*
-	 * Must check for deleted tuple.
-	 */
-	if (!ItemIdIsNormal(lp))
-	{
-		LockBuffer(buffer, BUFFER_LOCK_UNLOCK);
-		if (keep_buf)
-			*userbuf = buffer;
-		else
-		{
-			ReleaseBuffer(buffer);
-			*userbuf = InvalidBuffer;
-		}
-		tuple->t_data = NULL;
-		return false;
-	}
-
+	// lp = PageGetItemId(page, offnum);
+	
 	/*
 	 * fill in *tuple fields
 	 */
-	tuple->t_data = (HeapTupleStart) PageGetItem(page, lp);
-	tuple->t_len = ItemIdGetLength(lp);
+	tuple->t_data = (HeapTupleStart) PageGetItemIdx(page, offnum);
+	tuple->t_len = TUPLESIZE;
 	tuple->t_tableOid = RelationGetRelid(relation);
 
 	/*
@@ -1624,6 +1661,8 @@ heap_insert(Relation relation, HeapTuple tup, CommandId cid,
 	/* NO EREPORT(ERROR) from here till changes are logged */
 	START_CRIT_SECTION();
 
+	elog(DEBUG4, "Get the buffer");
+	
 	RelationPutHeapTuple(relation, buffer, heaptup);
 	elog(DEBUG4, "Put the tuple");
 
@@ -2861,6 +2900,7 @@ heap_xlog_freeze(XLogRecPtr lsn, XLogRecord *record)
 	Buffer		buffer;
 	Page		page;
 
+	return;
 	/*
 	 * In Hot Standby mode, ensure that there's no queries running which still
 	 * consider the frozen xids as running.
@@ -3057,6 +3097,8 @@ heap_xlog_delete(XLogRecPtr lsn, XLogRecord *record)
 	ItemId		lp = NULL;
 	HeapTupleHeader htup;
 	BlockNumber blkno;
+
+	return;
 
 	blkno = ItemPointerGetBlockNumber(&(xlrec->target.tid));
 
@@ -3415,6 +3457,8 @@ heap_xlog_update(XLogRecPtr lsn, XLogRecord *record, bool hot_update)
 	uint32		newlen;
 	Size		freespace;
 
+	return;
+
 	/*
 	 * The visibility map may need to be fixed even if the heap page is
 	 * already up-to-date.
@@ -3648,6 +3692,8 @@ heap_xlog_lock(XLogRecPtr lsn, XLogRecord *record)
 	ItemId		lp = NULL;
 	HeapTupleHeader htup;
 
+	return;
+
 	/* If we have a full-page image, restore it and we're done */
 	if (record->xl_info & XLR_BKP_BLOCK(0))
 	{
@@ -3710,6 +3756,8 @@ heap_xlog_inplace(XLogRecPtr lsn, XLogRecord *record)
 	HeapTupleHeader htup;
 	uint32		oldlen;
 	uint32		newlen;
+
+	return;
 
 	/* If we have a full-page image, restore it and we're done */
 	if (record->xl_info & XLR_BKP_BLOCK(0))

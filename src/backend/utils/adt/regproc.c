@@ -58,7 +58,7 @@ static void parseNameAndArgTypes(const char *string, bool allowNone,
 Datum
 regprocin(PG_FUNCTION_ARGS)
 {
-	elog(DEBUG4, "We're checking a tuple");
+	elog(DEBUG4, "We're checking a regprocin");
 	char	   *pro_name_or_oid = PG_GETARG_CSTRING(0);
 	RegProcedure result = InvalidOid;
 	List	   *names;

@@ -166,7 +166,13 @@ typedef struct HeapTupleHeaderData
 
 typedef HeapTupleHeaderData *HeapTupleHeader;
 
-typedef Pointer HeapTupleStart;
+typedef struct
+{
+	Oid t_oid;
+	/* more data follows */
+} HeapTupleStartData;
+
+typedef HeapTupleStartData *HeapTupleStart;
 
 /*
  * information stored in t_infomask:
@@ -483,10 +489,9 @@ typedef HeapTupleData *HeapTuple;
 
 #define HeapTupleClearHeapOnly(tuple) (void)NULL
 
-#define HeapTupleGetOid(tuple) \
- 	(ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("We don't store Oids"))), 0)
+#define HeapTupleGetOid(tuple) (tuple)->t_data->t_oid
 
-#define HeapTupleSetOid(tuple, oid) (void)NULL
+#define HeapTupleSetOid(tuple, oid) ((tuple)->t_data->t_oid = (oid))
 
 
 /*
@@ -731,41 +736,42 @@ extern void HeapTupleHeaderAdjustCmax(HeapTupleHeader tup,
  * ----------------
  */
 
-#if !defined(DISABLE_COMPLEX_MACRO)
+// #if 
+ //!defined(DISABLE_COMPLEX_MACRO)
 
-#define fastgetattr(tup, attnum, tupleDesc, isnull)					\
-(																	\
-	AssertMacro((attnum) > 0),										\
-	(*(isnull) = false),											\
-	HeapTupleNoNulls(tup) ?											\
-	(																\
-		(tupleDesc)->attrs[(attnum)-1]->attcacheoff >= 0 ?			\
-		(															\
-			fetchatt((tupleDesc)->attrs[(attnum)-1],				\
-				(char *) (tup)->t_data + (tup)->t_data->t_hoff +	\
-					(tupleDesc)->attrs[(attnum)-1]->attcacheoff)	\
-		)															\
-		:															\
-			nocachegetattr((tup), (attnum), (tupleDesc))			\
-	)																\
-	:																\
-	(																\
-		att_isnull((attnum)-1, (tup)->t_data->t_bits) ?				\
-		(															\
-			(*(isnull) = true),										\
-			(Datum)NULL												\
-		)															\
-		:															\
-		(															\
-			nocachegetattr((tup), (attnum), (tupleDesc))			\
-		)															\
-	)																\
-)
-#else							/* defined(DISABLE_COMPLEX_MACRO) */
+// #define fastgetattr(tup, attnum, tupleDesc, isnull)					\
+// (																	\
+// 	AssertMacro((attnum) > 0),										\
+// 	(*(isnull) = false),											\
+// 	HeapTupleNoNulls(tup) ?											\
+// 	(																\
+// 		(tupleDesc)->attrs[(attnum)-1]->attcacheoff >= 0 ?			\
+// 		(															\
+// 			fetchatt((tupleDesc)->attrs[(attnum)-1],				\
+// 				(char *) (tup)->t_data + (tup)->t_data->t_hoff +	\
+// 					(tupleDesc)->attrs[(attnum)-1]->attcacheoff)	\
+// 		)															\
+// 		:															\
+// 			nocachegetattr((tup), (attnum), (tupleDesc))			\
+// 	)																\
+// 	:																\
+// 	(																\
+// 		att_isnull((attnum)-1, (tup)->t_data->t_bits) ?				\
+// 		(															\
+// 			(*(isnull) = true),										\
+// 			(Datum)NULL												\
+// 		)															\
+// 		:															\
+// 		(															\
+// 			nocachegetattr((tup), (attnum), (tupleDesc))			\
+// 		)															\
+// 	)																\
+// )
+// #else							/* defined(DISABLE_COMPLEX_MACRO) */
 
 extern Datum fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 			bool *isnull);
-#endif   /* defined(DISABLE_COMPLEX_MACRO) */
+// #endif   /* defined(DISABLE_COMPLEX_MACRO) */
 
 
 /* ----------------
@@ -790,6 +796,7 @@ extern Datum fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 			((attnum) > (int)NUMATTRS) ? \
 			( \
 				(*(isnull) = true), \
+				elog(DEBUG4, "Value is null"), \
 				(Datum)NULL \
 			) \
 			: \

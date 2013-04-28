@@ -38,7 +38,7 @@ PageInit(Page page, Size pageSize, Size specialSize)
 	Assert(pageSize > specialSize + SizeOfPageHeaderData);
 
 	/* Make sure all fields of page are zero, as well as unused space */
-	MemSet(p, 0, pageSize);
+	MemSet(p, 'x', pageSize);
 
 	/* p->pd_flags = 0;								done by above MemSet */
 	p->pd_lower = SizeOfPageHeaderData;
@@ -177,7 +177,11 @@ PageAddItem(Page page,
 	}
 	elog(DEBUG4, "copying upper %d, size %d, blocksize %d", upper, TUPLESIZE, BLCKSZ);
 	/* copy the item's data onto the page */
+	
+
+	// remember to turn this back on
 	memcpy((char *) page + upper, item, TUPLESIZE);
+
 	/* adjust page header */
 	// phdr->pd_lower = (LocationIndex) lower;
 	phdr->pd_upper = (LocationIndex) upper;
@@ -306,6 +310,7 @@ PageRepairFragmentation(Page page)
 	Size		totallen;
 	Offset		upper;
 
+	return;
 	/*
 	 * It's worth the trouble to be more paranoid here than in most places,
 	 * because we are about to reshuffle data in (what is usually) a shared
@@ -474,54 +479,7 @@ PageGetExactFreeSpace(Page page)
 Size
 PageGetHeapFreeSpace(Page page)
 {
-	Size		space;
-
-	space = PageGetFreeSpace(page);
-	if (space > 0)
-	{
-		OffsetNumber offnum,
-					nline;
-
-		/*
-		 * Are there already MaxHeapTuplesPerPage line pointers in the page?
-		 */
-		nline = PageGetMaxOffsetNumber(page);
-		if (nline >= MaxHeapTuplesPerPage)
-		{
-			if (PageHasFreeLinePointers((NewPageHeader) page))
-			{
-				/*
-				 * Since this is just a hint, we must confirm that there is
-				 * indeed a free line pointer
-				 */
-				for (offnum = FirstOffsetNumber; offnum <= nline; offnum = OffsetNumberNext(offnum))
-				{
-					ItemId		lp = PageGetItemId(page, offnum);
-
-					if (!ItemIdIsUsed(lp))
-						break;
-				}
-
-				if (offnum > nline)
-				{
-					/*
-					 * The hint is wrong, but we can't clear it here since we
-					 * don't have the ability to mark the page dirty.
-					 */
-					space = 0;
-				}
-			}
-			else
-			{
-				/*
-				 * Although the hint might be wrong, PageAddItem will believe
-				 * it anyway, so we must believe it too.
-				 */
-				space = 0;
-			}
-		}
-	}
-	return space;
+	return PageGetFreeSpace(page);
 }
 
 

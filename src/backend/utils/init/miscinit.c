@@ -63,7 +63,7 @@ static char socketLockFile[MAXPGPATH];
  * ----------------------------------------------------------------
  */
 
-bool		IgnoreSystemIndexes = false;
+bool		IgnoreSystemIndexes = true;
 
 
 /* ----------------------------------------------------------------

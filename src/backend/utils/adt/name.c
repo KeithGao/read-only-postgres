@@ -136,6 +136,8 @@ nameeq(PG_FUNCTION_ARGS)
 	Name		arg1 = PG_GETARG_NAME(0);
 	Name		arg2 = PG_GETARG_NAME(1);
 
+	elog(DEBUG4, "Name comparison: %.16s, %.16s", NameStr(*arg1), NameStr(*arg2));
+
 	PG_RETURN_BOOL(strncmp(NameStr(*arg1), NameStr(*arg2), NAMEDATALEN) == 0);
 }
 

@@ -86,7 +86,7 @@ heap_compute_data_size(TupleDesc tupleDesc,
 					   Datum *values,
 					   bool *isnull)
 {
-	return TUPLESIZE - SizeOfPageHeaderData;
+	return TUPLESIZE - sizeof(HeapTupleStartData);
 	// Size		data_length = 0;
 	// int			i;
 	// int			numberOfAttributes = tupleDesc->natts;
@@ -143,6 +143,7 @@ heap_fill_tuple(TupleDesc tupleDesc,
 	int			numberOfAttributes = tupleDesc->natts;
 	Form_pg_attribute *att = tupleDesc->attrs;
 
+	char *_starter = data;
 	char nulls[ATTRSIZE];
 	int counthing;
 	for (counthing = 0; counthing < ATTRSIZE; counthing++)
@@ -174,11 +175,21 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		if (att[i]->attbyval)
 		{
 			elog(DEBUG4, "By value");
+
+			char varray[ATTRSIZE];
+			int vc;
+			for (vc=0;vc<ATTRSIZE; vc++)
+				varray[vc] = 'b';
+			memcpy(data, varray, ATTRSIZE);
+
+
 			/* pass-by-value */
 			// data = (char *) att_align_nominal(data, att[i]->attalign);
-			memcpy(data, nulls, ATTRSIZE - 1);
-			char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
-			memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
+
+
+			// memcpy(data, nulls, ATTRSIZE - 1);
+			// char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
+			// memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
 
 			// store_att_byval(data, values[i], att[i]->attlen);
 			data_length = ATTRSIZE;
@@ -186,7 +197,12 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		else if (att[i]->attlen == -1)
 		{
 			elog(DEBUG4, "Variable length");
-			memcpy(data, nulls, ATTRSIZE);
+			char varray[ATTRSIZE];
+			int vc;
+			for (vc=0;vc<ATTRSIZE; vc++)
+				varray[vc] = 'v';
+			memcpy(data, varray, ATTRSIZE);
+
 			//ereport(DEBUG4, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
 			
 			/* varlena */
@@ -237,17 +253,36 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		{
 
 			elog(DEBUG4, "fixlen");
+			char varray[ATTRSIZE];
+			int vc;
+			for (vc=0;vc<ATTRSIZE; vc++)
+				varray[vc] = 'f';
+			memcpy(data, varray, ATTRSIZE);
+
 			/* fixed-length pass-by-reference */
 			// data = (char *) att_align_nominal(data, att[i]->attalign);
-			Assert(att[i]->attlen > 0);
+			
+			/*Assert(att[i]->attlen > 0);
 			data_length = att[i]->attlen;
 			Assert(data_length <= ATTRSIZE);
 			memcpy(data, nulls, ATTRSIZE - data_length);
 			memcpy(data + ATTRSIZE - data_length, DatumGetPointer(values[i]), data_length);
+			*/
 
 		}
+
+		// int __tuplec;
+		// for (__tuplec = 0; __tuplec < ATTRSIZE; __tuplec++) {
+		// 	elog(DEBUG4, "Written is %c", *(data + __tuplec));
+		// }
 		data += ATTRSIZE;
 	}
+
+	int __tuplec;
+
+	// for (__tuplec = 0; __tuplec < TUPLESIZE; __tuplec++) {
+	// 	elog(DEBUG4, "The Byte is %c at %d", *(_starter + __tuplec), __tuplec);
+	// }
 
 	// Assert((data - start) >= data_size);
 	elog(DEBUG4, "Done with filling");
@@ -536,6 +571,8 @@ heap_getsysattr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool *isnull)
 
 	Assert(tup);
 
+	elog(DEBUG4, "heapgetsysattr");
+
 	/* Currently, no sys attribute ever reads as NULL. */
 	*isnull = false;
 
@@ -545,29 +582,33 @@ heap_getsysattr(HeapTuple tup, int attnum, TupleDesc tupleDesc, bool *isnull)
 			/* pass-by-reference datatype */
 			result = PointerGetDatum(&(tup->t_self));
 			break;
-//		case ObjectIdAttributeNumber:
-//                result = ObjectIdGetDatum(HeapTupleGetOid(tup));
-//                break;
-//        case MinTransactionIdAttributeNumber:
-//                result = TransactionIdGetDatum(HeapTupleHeaderGetXmin(tup->t_data));
-//                break;
-//        case MaxTransactionIdAttributeNumber:
-//                result = TransactionIdGetDatum(HeapTupleHeaderGetXmax(tup->t_data));
-//                break;
-//        case MinCommandIdAttributeNumber:
-//        case MaxCommandIdAttributeNumber:
-//
-//                /*
-//                 * cmin and cmax are now both aliases for the same field, which
-//                 * can in fact also be a combo command id.      XXX perhaps we should
-//                 * return the "real" cmin or cmax if possible, that is if we are
-//                 * inside the originating transaction?
-//                 */
-//                result = CommandIdGetDatum(HeapTupleHeaderGetRawCommandId(tup->t_data));
-//                break;
-//        case TableOidAttributeNumber:
-//                result = ObjectIdGetDatum(tup->t_tableOid);
-//                      break;
+		case ObjectIdAttributeNumber:
+				elog(DEBUG4, "Getting an object");
+				elog(DEBUG4, "We got oid %u", HeapTupleGetOid(tup));
+               result = ObjectIdGetDatum(HeapTupleGetOid(tup));
+               break;
+       case MinTransactionIdAttributeNumber:
+               result = TransactionIdGetDatum(HeapTupleHeaderGetXmin(tup->t_data));
+               break;
+       case MaxTransactionIdAttributeNumber:
+               result = TransactionIdGetDatum(HeapTupleHeaderGetXmax(tup->t_data));
+               break;
+       case MinCommandIdAttributeNumber:
+       case MaxCommandIdAttributeNumber:
+
+               /*
+                * cmin and cmax are now both aliases for the same field, which
+                * can in fact also be a combo command id.      XXX perhaps we should
+                * return the "real" cmin or cmax if possible, that is if we are
+                * inside the originating transaction?
+                */
+               // result = CommandIdGetDatum(HeapTupleHeaderGetRawCommandId(tup->t_data));
+                elog(ERROR, "max command not allowed");
+                result = 0;
+               break;
+       case TableOidAttributeNumber:
+               result = ObjectIdGetDatum(tup->t_tableOid);
+                     break;
 
 		default:
 			elog(ERROR, "invalid attnum: %d", attnum);
@@ -685,7 +726,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	/*
 	 * Determine total space needed
 	 */
-	 len = TUPLESIZE;
+	 len = sizeof(HeapTupleStartData) + TUPLESIZE;
 	 
 	/*
 	 * Allocate and zero the space needed.	Note that the tuple body and
@@ -701,6 +742,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	 * this tuple may never become a Datum.
 	 */
 	tuple->t_tableOid = InvalidOid;
+	((HeapTupleStart)tuple->t_data)->t_oid = InvalidOid;
 
 	// HeapTupleHeaderSetDatumLength(td, len);
 	// HeapTupleHeaderSetTypeId(td, tupleDescriptor->tdtypeid);
@@ -717,7 +759,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	heap_fill_tuple(tupleDescriptor,
 					values,
 					isnull,
-					(char *) td,
+					(char *)td + sizeof(HeapTupleStartData),
 					data_len,
 					(uint16)0,
 					NULL);
@@ -908,7 +950,7 @@ heap_deform_tuple(HeapTuple tuple, TupleDesc tupleDesc,
 	 */
 	natts = Min(natts, tdesc_natts);
 
-	tp = tup;
+	tp = tup + sizeof(HeapTupleStartData);
 
 	off = 0;
 
@@ -1060,7 +1102,7 @@ slot_deform_tuple(TupleTableSlot *slot, int natts)
 		slow = slot->tts_slow;
 	}
 
-	tp = tup;
+	tp = tup + sizeof(HeapTupleStartData);
 	// tp = (char *) tup + tup->t_hoff;
 
 	for (; attnum < natts; attnum++)

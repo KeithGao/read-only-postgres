@@ -100,6 +100,8 @@ heap_page_prune(Relation relation, Buffer buffer, TransactionId OldestXmin,
 				maxoff;
 	PruneState	prstate;
 
+	elog(DEBUG4, "pruning");
+
 	/*
 	 * Our strategy is to scan the page and make lists of items to change,
 	 * then apply the changes within a critical section.  This keeps as much
@@ -283,6 +285,7 @@ heap_prune_chain(Relation relation, Buffer buffer, OffsetNumber rootoffnum,
 	int			nchain = 0,
 				i;
 
+	elog(DEBUG4, "pruning some more");
 	rootlp = PageGetItemId(dp, rootoffnum);
 
 	/*
@@ -586,6 +589,7 @@ heap_page_prune_execute(Buffer buffer,
 						OffsetNumber *nowdead, int ndead,
 						OffsetNumber *nowunused, int nunused)
 {
+	elog(DEBUG4, "prune execute");
 	Page		page = (Page) BufferGetPage(buffer);
 	OffsetNumber *offnum;
 	int			i;
@@ -647,6 +651,7 @@ heap_page_prune_execute(Buffer buffer,
 void
 heap_get_root_tuples(Page page, OffsetNumber *root_offsets)
 {
+	elog(DEBUG4, "root tuples");
 	OffsetNumber offnum,
 				maxoff;
 

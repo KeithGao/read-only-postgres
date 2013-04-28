@@ -1423,7 +1423,7 @@ static struct config_bool ConfigureNamesBool[] =
 			GUC_NOT_IN_SAMPLE
 		},
 		&IgnoreSystemIndexes,
-		false,
+		true,
 		NULL, NULL, NULL
 	},
 

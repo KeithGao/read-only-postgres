@@ -34,7 +34,7 @@
  *
  * Note that T must already be properly aligned for this to work correctly.
  */
-#define fetchatt(A,T) fetch_att(T, (A)->attbyval, ATTRSIZE)
+#define fetchatt(A,T) fetch_att(T, (A)->attbyval, (A)->attlen)
 
 /*
  * Same, but work from byval/len parameters rather than Form_pg_attribute.
@@ -46,47 +46,48 @@
 	(attbyval) ? \
 	( \
 		(attlen) == (int) sizeof(Datum) ? \
-			*((Datum *)(T)) \
+			( elog(DEBUG4, "attr is %u", *((Datum *)((T) + ATTRSIZE - attlen))), *((Datum *)((T) + ATTRSIZE - attlen)) ) \
 		: \
 	  ( \
 		(attlen) == (int) sizeof(int32) ? \
-			Int32GetDatum(*((int32 *)(T))) \
+			( elog(DEBUG4, "int32"), Int32GetDatum(*((int32 *)((T) + ATTRSIZE - attlen))) ) \
 		: \
 		( \
 			(attlen) == (int) sizeof(int16) ? \
-				Int16GetDatum(*((int16 *)(T))) \
+				( elog(DEBUG4, "int16"), Int16GetDatum(*((int16 *)((T) + ATTRSIZE - attlen))) ) \
 			: \
 			( \
 				AssertMacro((attlen) == 1), \
-				CharGetDatum(*((char *)(T))) \
+				CharGetDatum(*((char *)((T) + ATTRSIZE - attlen))) \
 			) \
 		) \
 	  ) \
 	) \
 	: \
-	PointerGetDatum((char *) (T)) \
+	( elog(DEBUG4, "pointer %p", PointerGetDatum((char *) ((T) + ATTRSIZE - attlen))), PointerGetDatum((char *) ((T) + ATTRSIZE - attlen)) ) \
 )
 #else							/* SIZEOF_DATUM != 8 */
 
 #define fetch_att(T,attbyval,attlen) \
 ( \
+	elog(DEBUG4, "More stuff"), \
 	(attbyval) ? \
 	( \
 		(attlen) == (int) sizeof(int32) ? \
-			Int32GetDatum(*((int32 *)(T))) \
+			Int32GetDatum(*((int32 *)((T) + ATTRSIZE - attlen))) \
 		: \
 		( \
 			(attlen) == (int) sizeof(int16) ? \
-				Int16GetDatum(*((int16 *)(T))) \
+				Int16GetDatum(*((int16 *)((T) + ATTRSIZE - attlen))) \
 			: \
 			( \
 				AssertMacro((attlen) == 1), \
-				CharGetDatum(*((char *)(T))) \
+				CharGetDatum(*((char *)((T) + ATTRSIZE - attlen))) \
 			) \
 		) \
 	) \
 	: \
-	PointerGetDatum((char *) (T)) \
+	PointerGetDatum((char *) ((T) + ATTRSIZE - attlen)) \
 )
 #endif   /* SIZEOF_DATUM == 8 */
 

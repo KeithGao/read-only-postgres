@@ -77,6 +77,7 @@ heap_page_items(PG_FUNCTION_ARGS)
 	FuncCallContext *fctx;
 	int			raw_page_size;
 
+	elog(DEBUG4, "Heap page items");
 	if (!superuser())
 		ereport(ERROR,
 				(errcode(ERRCODE_INSUFFICIENT_PRIVILEGE),

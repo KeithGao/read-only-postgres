@@ -214,8 +214,15 @@ typedef PageHeaderData *PageHeader;
  * PageGetItemId
  *		Returns an item identifier of a page.
  */
+
+#define PageGetItemIdx(page, offsetNumber) \
+	((Item) (&((NewPageHeader) (page))->pd_linp[((BLCKSZ / TUPLESIZE) - (offsetNumber) - 1) * TUPLESIZE]))
+
 #define PageGetItemId(page, offsetNumber) \
-	((ItemId) (&((NewPageHeader) (page))->pd_linp[((offsetNumber) - 1) * TUPLESIZE]))
+( \
+	ereport(ERROR, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("I disabled itemid"))), \
+	(ItemId)0  \
+)
 
 /*
  * PageGetContents
@@ -302,9 +309,10 @@ typedef PageHeaderData *PageHeader;
 #define PageGetItem(page, itemId) \
 ( \
 	AssertMacro(PageIsValid(page)), \
-	AssertMacro(ItemIdHasStorage(itemId)), \
-	(Item)(((char *)(page)) + ItemIdGetOffset(itemId)) \
+	(Item)(((char *)(page)) + TUPLESIZE * ItemIdGetOffset((ItemId)itemId)) \
 )
+
+// 	AssertMacro(ItemIdHasStorage(itemId)), \
 
 
 /*

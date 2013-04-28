@@ -472,6 +472,7 @@ RelationGetBufferForTuple(Relation relation, Size len,
 			 RelationGetRelationName(relation));
 
 	PageInit(page, BufferGetPageSize(buffer), 0);
+	elog(DEBUG4, "Relation get buffer input");
 
 	if (len > PageGetHeapFreeSpace(page))
 	{
@@ -489,6 +490,6 @@ RelationGetBufferForTuple(Relation relation, Size len,
 	 * good bet most of the time.  So for now, don't add it to FSM yet.
 	 */
 	RelationSetTargetBlock(relation, BufferGetBlockNumber(buffer));
-
+	elog(DEBUG4, "Returning from get buffer");
 	return buffer;
 }

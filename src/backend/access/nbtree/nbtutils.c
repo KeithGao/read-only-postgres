@@ -1373,6 +1373,7 @@ _bt_checkkeys(IndexScanDesc scan,
 			  Page page, OffsetNumber offnum,
 			  ScanDirection dir, bool *continuescan)
 {
+	elog(DEBUG4, "checkkeys");
 	ItemId		iid = PageGetItemId(page, offnum);
 	bool		tuple_alive;
 	IndexTuple	tuple;
