@@ -1183,7 +1183,7 @@ static struct config_bool ConfigureNamesBool[] =
 			NULL
 		},
 		&DefaultXactReadOnly,
-		true,
+		false,
 		NULL, NULL, NULL
 	},
 	{
