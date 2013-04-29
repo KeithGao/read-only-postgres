@@ -176,20 +176,20 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		{
 			elog(DEBUG4, "By value");
 
-			char varray[ATTRSIZE];
-			int vc;
-			for (vc=0;vc<ATTRSIZE; vc++)
-				varray[vc] = 'b';
-			memcpy(data, varray, ATTRSIZE);
+			// char varray[ATTRSIZE];
+			// int vc;
+			// for (vc=0;vc<ATTRSIZE; vc++)
+			// 	varray[vc] = 'b';
+			// memcpy(data, varray, ATTRSIZE);
 
 
 			/* pass-by-value */
-			// data = (char *) att_align_nominal(data, att[i]->attalign);
+			data = (char *) att_align_nominal(data, att[i]->attalign);
 
 
-			// memcpy(data, nulls, ATTRSIZE - 1);
-			// char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
-			// memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
+			memcpy(data, nulls, ATTRSIZE - 1);
+			char *pointer_aligned_val = (char *)DatumGetPointer(values[i]);
+			memcpy(data + ATTRSIZE - 1, &pointer_aligned_val, 1);
 
 			// store_att_byval(data, values[i], att[i]->attlen);
 			data_length = ATTRSIZE;
@@ -197,52 +197,52 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		else if (att[i]->attlen == -1)
 		{
 			elog(DEBUG4, "Variable length");
-			char varray[ATTRSIZE];
-			int vc;
-			for (vc=0;vc<ATTRSIZE; vc++)
-				varray[vc] = 'v';
-			memcpy(data, varray, ATTRSIZE);
+
+			// char varray[ATTRSIZE];
+			// int vc;
+			// for (vc=0;vc<ATTRSIZE; vc++)
+			// 	varray[vc] = 'v';
+			// memcpy(data, varray, ATTRSIZE);
 
 			//ereport(DEBUG4, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now, bitch!")));
 			
 			/* varlena */
-			// Pointer		val = DatumGetPointer(values[i]);
+			Pointer		val = DatumGetPointer(values[i]);
 
 			// *infomask |= HEAP_HASVARWIDTH;
-			// if (VARATT_IS_EXTERNAL(val))
-			// {
-			// 	*infomask |= HEAP_HASEXTERNAL;
-			// 	/* no alignment, since it's short by definition */
-			// 	data_length = VARSIZE_EXTERNAL(val);
-			// 	memcpy(data, val, data_length);
-			// }
-			// else if (VARATT_IS_SHORT(val))
-			// {
-			// 	/* no alignment for short varlenas */
-			// 	data_length = VARSIZE_SHORT(val);
-			// 	memcpy(data, val, data_length);
-			// }
-			// else if (VARLENA_ATT_IS_PACKABLE(att[i]) &&
-			// 		 VARATT_CAN_MAKE_SHORT(val))
-			// {
-			// 	/* convert to short varlena -- no alignment */
-			// 	data_length = VARATT_CONVERTED_SHORT_SIZE(val);
-			// 	SET_VARSIZE_SHORT(data, data_length);
-			// 	memcpy(data + 1, VARDATA(val), data_length - 1);
-			// }
-			// else
-			// {
-			// 	/* full 4-byte header varlena */
-			// 	data = (char *) att_align_nominal(data,
-			// 									  att[i]->attalign);
-			// 	data_length = VARSIZE(val);
-			// 	memcpy(data, val, data_length);
-			// }
+			if (VARATT_IS_EXTERNAL(val))
+			{
+				*infomask |= HEAP_HASEXTERNAL;
+				/* no alignment, since it's short by definition */
+				data_length = VARSIZE_EXTERNAL(val);
+			}
+			else if (VARATT_IS_SHORT(val))
+			{
+				/* no alignment for short varlenas */
+				data_length = VARSIZE_SHORT(val);
+			}
+			else if (VARLENA_ATT_IS_PACKABLE(att[i]) &&
+					 VARATT_CAN_MAKE_SHORT(val))
+			{
+				/* convert to short varlena -- no alignment */
+				data_length = VARATT_CONVERTED_SHORT_SIZE(val);
+				SET_VARSIZE_SHORT(data, data_length);
+				val = VARDATA(val);
+			}
+			else
+			{
+				/* full 4-byte header varlena */
+				data = (char *) att_align_nominal(data,
+												  att[i]->attalign);
+				data_length = VARSIZE(val);
+				memcpy(data, val, data_length);
+			}
+			memcpy(data + ATTRSIZE - data_length, val, data_length);	
 		}
 		else if (att[i]->attlen == -2)
 		{
 			elog(DEBUG4, "C string");
-			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No var lens: We're read only now!")));
+			ereport(PANIC, (errcode(ERRCODE_FEATURE_NOT_SUPPORTED), errmsg("No c strings: We're read only now!")));
 			/* cstring ... never needs alignment */
 			// *infomask |= HEAP_HASVARWIDTH;
 			// Assert(att[i]->attalign == 'c');
@@ -253,21 +253,21 @@ heap_fill_tuple(TupleDesc tupleDesc,
 		{
 
 			elog(DEBUG4, "fixlen");
-			char varray[ATTRSIZE];
-			int vc;
-			for (vc=0;vc<ATTRSIZE; vc++)
-				varray[vc] = 'f';
-			memcpy(data, varray, ATTRSIZE);
+
+			// char varray[ATTRSIZE];
+			// int vc;
+			// for (vc=0;vc<ATTRSIZE; vc++)
+			// 	varray[vc] = 'f';
+			// memcpy(data, varray, ATTRSIZE);
 
 			/* fixed-length pass-by-reference */
-			// data = (char *) att_align_nominal(data, att[i]->attalign);
-			
-			/*Assert(att[i]->attlen > 0);
+			data = (char *) att_align_nominal(data, att[i]->attalign);
+			Assert(att[i]->attlen > 0);
 			data_length = att[i]->attlen;
 			Assert(data_length <= ATTRSIZE);
 			memcpy(data, nulls, ATTRSIZE - data_length);
 			memcpy(data + ATTRSIZE - data_length, DatumGetPointer(values[i]), data_length);
-			*/
+
 
 		}
 
@@ -635,7 +635,7 @@ heap_copytuple(HeapTuple tuple)
 	if (!HeapTupleIsValid(tuple) || tuple->t_data == NULL)
 		return NULL;
 
-	newTuple = (HeapTuple) palloc(TUPLESIZE);
+	newTuple = (HeapTuple) palloc(HEAPTUPLESIZE + TUPLESIZE);
 	newTuple->t_tableOid = tuple->t_tableOid;
 	newTuple->t_self = tuple->t_self;
 	memcpy((char *) newTuple->t_data, (char *) tuple->t_data, TUPLESIZE);
@@ -726,7 +726,7 @@ heap_form_tuple(TupleDesc tupleDescriptor,
 	/*
 	 * Determine total space needed
 	 */
-	 len = sizeof(HeapTupleStartData) + TUPLESIZE;
+	len = TUPLESIZE;
 	 
 	/*
 	 * Allocate and zero the space needed.	Note that the tuple body and
@@ -1573,10 +1573,12 @@ MinimalTuple
 minimal_tuple_from_heap_tuple(HeapTuple htup)
 {
 	MinimalTuple result;
-	uint32		len;
+	uint32	len;
 
-	len = TUPLESIZE - MINIMAL_TUPLE_OFFSET;
+	Assert(htup->t_len > MINIMAL_TUPLE_OFFSET);
+	len = htup->t_len - MINIMAL_TUPLE_OFFSET;
 	result = (MinimalTuple) palloc(len);
 	memcpy(result, (char *) htup->t_data + MINIMAL_TUPLE_OFFSET, len);
+	result->t_len = len;
 	return result;
 }

@@ -124,8 +124,6 @@ typedef struct NewPageHeaderData
 {
 	LocationIndex pd_lower;		/* offset to start of free space */
 	LocationIndex pd_upper;		/* offset to end of free space */
-	uint16		  pd_pagesize_version;
-	ItemIdData	  pd_linp[1];		/* beginning of the tuple's contents */
 } NewPageHeaderData;
 
 typedef NewPageHeaderData *NewPageHeader;
@@ -195,7 +193,7 @@ typedef PageHeaderData *PageHeader;
 /*
  * line pointer(s) do not count as part of header
  */
-#define SizeOfPageHeaderData (offsetof(NewPageHeaderData, pd_linp))
+#define SizeOfPageHeaderData (sizeof(NewPageHeaderData))
 
 /*
  * PageIsEmpty
@@ -216,7 +214,7 @@ typedef PageHeaderData *PageHeader;
  */
 
 #define PageGetItemIdx(page, offsetNumber) \
-	((Item) (&((NewPageHeader) (page))->pd_linp[((BLCKSZ / TUPLESIZE) - (offsetNumber) - 1) * TUPLESIZE]))
+	((Item) ((page + BLCKSZ - (TUPLESIZE * (offsetNumber)))))
 
 #define PageGetItemId(page, offsetNumber) \
 ( \
@@ -254,15 +252,13 @@ typedef PageHeaderData *PageHeader;
  * BufferGetPageSize, which can be called on an unformatted page).
  * however, it can be called on a page that is not stored in a buffer.
  */
-#define PageGetPageSize(page) \
-	((Size) (((NewPageHeader) (page))->pd_pagesize_version & (uint16) 0xFF00))
+#define PageGetPageSize(page) BLCKSZ
 
 /*
  * PageGetPageLayoutVersion
  *		Returns the page layout version of a page.
  */
-#define PageGetPageLayoutVersion(page) \
-	(((NewPageHeader) (page))->pd_pagesize_version & 0x00FF)
+#define PageGetPageLayoutVersion(page) 5
 
 /*
  * PageSetPageSizeAndVersion
@@ -271,12 +267,7 @@ typedef PageHeaderData *PageHeader;
  * We could support setting these two values separately, but there's
  * no real need for it at the moment.
  */
-#define PageSetPageSizeAndVersion(page, size, version) \
-( \
-	AssertMacro(((size) & 0xFF00) == (size)), \
-	AssertMacro(((version) & 0x00FF) == (version)), \
-	((NewPageHeader) (page))->pd_pagesize_version = (size) | (version) \
-)
+#define PageSetPageSizeAndVersion(page, size, version) (void)NULL
 
 /* ----------------
  *		page special data macros

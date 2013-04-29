@@ -38,7 +38,7 @@ PageInit(Page page, Size pageSize, Size specialSize)
 	Assert(pageSize > specialSize + SizeOfPageHeaderData);
 
 	/* Make sure all fields of page are zero, as well as unused space */
-	MemSet(p, 'x', pageSize);
+	MemSet(p, 0, pageSize);
 
 	/* p->pd_flags = 0;								done by above MemSet */
 	p->pd_lower = SizeOfPageHeaderData;
@@ -46,6 +46,26 @@ PageInit(Page page, Size pageSize, Size specialSize)
 	PageSetPageSizeAndVersion(page, pageSize, PG_PAGE_LAYOUT_VERSION);
 	/* p->pd_prune_xid = InvalidTransactionId;		done by above MemSet */
 	elog(DEBUG4, "p->lower: %u, p->upper: %u", p->pd_lower, p->pd_upper);
+
+	// Pointer dpptr = ((NewPageHeader)page)->pd_linp + sizeof(HeapTupleStartData);
+	// int colidx = 0;
+	// int theidx = 0;
+	// int failer =0;
+	// elog(DEBUG4, "BLCKSZ: %d, Header size: %d", BLCKSZ, sizeof(HeapTupleStartData));
+	// while (dpptr < page + BLCKSZ) {
+	// 	failer++;
+	// 	if (failer > 10000) elog(PANIC, "stopping");
+	// 	if (theidx >= TUPLESIZE) {
+	// 		theidx = 0;
+	// 		colidx++;
+	// 		dpptr += sizeof(HeapTupleStartData);
+	// 	}
+	// 	elog(DEBUG4, "zebyte %c at tuple: %d, idx: %d", *dpptr, colidx, theidx);
+	// 	theidx++;
+	// 	dpptr++;
+	// }
+
+	// elog(PANIC, "end of page");
 }
 
 
@@ -176,17 +196,15 @@ PageAddItem(Page page,
 		return limit;
 	}
 	elog(DEBUG4, "copying upper %d, size %d, blocksize %d", upper, TUPLESIZE, BLCKSZ);
-	/* copy the item's data onto the page */
 	
-
-	// remember to turn this back on
+	/* copy the item's data onto the page */
 	memcpy((char *) page + upper, item, TUPLESIZE);
 
 	/* adjust page header */
-	// phdr->pd_lower = (LocationIndex) lower;
+	phdr->pd_lower = (LocationIndex) lower;
 	phdr->pd_upper = (LocationIndex) upper;
 	elog(DEBUG4, "Done with my page add");
-	return oldUpper ;
+	return oldUpper;
 }
 
 /*

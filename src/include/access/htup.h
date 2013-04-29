@@ -25,9 +25,10 @@
 #define DISABLE_COMPLEX_MACRO true
 
 /* Fixed length tuple constants */
-#define TUPLESIZE 2048
-#define ATTRSIZE 64
-#define NUMATTRS 32
+#define TUPLESIZE 630
+#define ATTRSIZE 21
+#define NUMATTRS 30
+#define TUPPERPAGE 26
 
 /*
  * MaxTupleAttributeNumber limits the number of (user) columns in a tuple.
@@ -39,7 +40,7 @@
  * so that alterations in HeapTupleHeaderData layout won't change the
  * supported max number of columns.
  */
-#define MaxTupleAttributeNumber 32	/* 8 * 208 */
+#define MaxTupleAttributeNumber 30	/* 8 * 208 */
 
 /*
  * MaxHeapAttributeNumber limits the number of (user) columns in a table.
@@ -53,7 +54,7 @@
  * into the disk-block-based limit on overall tuple size if you have more
  * than a thousand or so columns.  TOAST won't help.
  */
-#define MaxHeapAttributeNumber	32	/* 8 * 200 */
+#define MaxHeapAttributeNumber	30	/* 8 * 200 */
 
 /*
  * Heap tuple header.  To avoid wasting space, the fields should be
@@ -257,7 +258,7 @@ typedef HeapTupleStartData *HeapTupleStart;
 
 #define HeapTupleHeaderSetXvac(tup, xid) (void)NULL
 
-#define HeapTupleHeaderGetDatumLength(tup) TUPLESIZE
+#define HeapTupleHeaderGetDatumLength(tup) (TUPLESIZE - sizeof(HeapTupleStartData))
 
 #define HeapTupleHeaderSetDatumLength(tup, len) (void)NULL
 

@@ -242,6 +242,52 @@ heapgetpage(HeapScanDesc scan, BlockNumber page)
 	scan->rs_ntuples = MaxHeapTuplesPerPage;
 }
 
+
+// fetchatt is the problem, I think
+// no, he isn't!
+// static void barf(TupleDesc td, HeapTuple tup, ScanKey curkeys) {
+static void barf(HeapTuple tup) {
+	char *dpptr = tup->t_data + sizeof(HeapTupleStartData);
+	int index = 0;
+	static int failer = 0;
+	while (dpptr < tup->t_data + TUPLESIZE) {
+		if (failer++ > 100000) elog(PANIC, "stopping");
+		elog(DEBUG4, "Bytepos is %c at %d", *dpptr, index++);
+		dpptr++;
+	}
+}
+
+//  + ((attnum -1) * ATTRSIZE);
+	// int attnum = 1; //curkeys->sk_attno;
+	// int attlen = td->attrs[attnum -1]->attlen;
+	// elog(DEBUG4, "barfing attribute %d, length %d", attnum, attlen);
+	// Pointer dpptr = tup->t_data + sizeof(HeapTupleStartData) + ((attnum -1) * ATTRSIZE);
+	// char *str = dpptr; // (char *)(dpptr + ATTRSIZE - attlen);
+	// (fetchatt(td->attrs[attnum -1], dpptr));
+	// elog(DEBUG4, "Checking attribute #%d", attnum);
+	// elog(DEBUG4, "my string is %c", *dpptr);
+
+// Pointer dpptr = tup->t_data + sizeof(HeapTupleStartData) + ((attnum -1) * ATTRSIZE);
+
+// int attnum ;
+// static int failer = 0;
+// for (attnum = 1; attnum <= NUMATTRS; attnum++) {
+// 	Pointer dpptr = tup->t_data + sizeof(HeapTupleStartData) + ((attnum -1) * ATTRSIZE);
+// 	elog(DEBUG4, "zestring at %d is %.10s", attnum, (char *)(fetchatt(td->attrs[attnum -1], dpptr)));
+
+	// Pointer attrptr = dpptr;
+	// int theindex =0;
+	// while (attrptr < dpptr + (attnum * ATTRSIZE)) {
+	// 	if (failer++ > 100000) elog(PANIC, "stopping");
+	// 	elog(DEBUG4, "zebyte %c at attnum: %d, index %d", *attrptr, attnum, theindex);
+	// 	attrptr++;
+	// 	theindex++;
+	// }
+// }
+
+// elog(DEBUG4, "end of tuple");
+
+
 /* ----------------
  *		heapgettup - fetch next heap tuple
  *
@@ -323,9 +369,9 @@ heapgettup(HeapScanDesc scan,
 		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
-		lines = PageGetMaxOffsetNumber(dp);
+		// lines = PageGetMaxOffsetNumber(dp);
 		/* page and lineoff now reference the physically next tid */
-		linesleft = lines - tupleidx + 1;
+		linesleft = TUPPERPAGE - tupleidx;
 	}
 	else if (backward)
 	{
@@ -367,7 +413,6 @@ heapgettup(HeapScanDesc scan,
 		LockBuffer(scan->rs_cbuf, BUFFER_LOCK_SHARE);
 
 		dp = (Page) BufferGetPage(scan->rs_cbuf);
-		lines = PageGetMaxOffsetNumber(dp);
 
 		if (!scan->rs_inited)
 		{
@@ -379,7 +424,7 @@ heapgettup(HeapScanDesc scan,
 			tupleidx = 	OffsetNumberPrev(ItemPointerGetOffsetNumber(&(tuple->t_self)));
 		}
 		/* page and lineoff now reference the physically previous tid */
-		linesleft = tupleidx;
+		linesleft = tupleidx -1;
 	}
 	else
 	{
@@ -403,31 +448,29 @@ heapgettup(HeapScanDesc scan,
 		tupleidx = ItemPointerGetOffsetNumber(&(tuple->t_self));
 		// Assert(ItemIdIsNormal(lpp));
 		tuple->t_data = (HeapTupleHeader) PageGetItemIdx((Page) dp, tupleidx);
-		tuple->t_len = TUPLESIZE;
+		tuple->t_len = TUPLESIZE - sizeof(HeapTupleStartData);
 		return;
 	}
 
-	// Print dp and fail out
+	Pointer dpptr = dp + SizeOfPageHeaderData + sizeof(HeapTupleStartData);
+	int colidx = 0;
+	int theidx = 0;
+	int failer =0;
+	// elog(DEBUG4, "BLCKSZ: %d, Header size: %d", BLCKSZ, sizeof(HeapTupleStartData));
+	while (dpptr < dp + BLCKSZ) {
+		failer++;
+		if (failer > 10000) elog(PANIC, "stopping");
+		if (theidx >= TUPLESIZE) {
+			theidx = sizeof(HeapTupleStartData);
+			colidx++;
+			dpptr += sizeof(HeapTupleStartData);
+		}
+		elog(DEBUG4, "zebyte %c at tuple: %d, idx: %d", *dpptr, colidx, theidx);
+		theidx++;
+		dpptr++;
+	}
 
-	// Pointer dpptr = ((NewPageHeader)dp)->pd_linp + sizeof(HeapTupleStartData);
-	// int colidx = 0;
-	// int theidx = 0;
-	// int failer;
-	// elog(DEBUG4, "BLCKSZ: %d, Header size: %d", BLCKSZ), sizeof(HeapTupleStartData);
-	// while (dpptr < dp + BLCKSZ) {
-	// 	failer++;
-	// 	if (failer > 10000) elog(PANIC, "stopping");
-	// 	if (theidx >= TUPLESIZE) {
-	// 		theidx = 0;
-	// 		colidx++;
-	// 		dpptr += sizeof(HeapTupleStartData);
-	// 	}
-	// 	elog(DEBUG4, "zebyte %c at tuple: %d, idx: %d", *dpptr, colidx, theidx);
-	// 	theidx++;
-	// 	dpptr++;
-	// }
-
-	// elog(PANIC, "end of page");
+	elog(PANIC, "end of page");
 
 
 	/*
@@ -435,17 +478,31 @@ heapgettup(HeapScanDesc scan,
 	 * to scan
 	 */
 	// lpp = PageGetItemId(dp, tupleidx);
+
 	for (;;)
 	{
+		elog(DEBUG4, "Lines left: %d, starting index: %d", linesleft, tupleidx);
 		while (linesleft > 0)
 		{
+			elog(DEBUG4, "Examining tuple #%u", tupleidx);
 			bool		valid;
 			tuple->t_data = (HeapTupleStart) PageGetItemIdx((Page) dp, tupleidx);
-			tuple->t_len = TUPLESIZE;
-			elog(DEBUG4, "Testing item %p", tuple->t_data);
+			tuple->t_len = TUPLESIZE - sizeof(HeapTupleStartData);
+			// elog(DEBUG4, "Testing item %p", tuple->t_data);
 			// WE USED TO ALWAYS TEST EXACTLY THE SAME ITEM
 			// PAGE GET ITEM IS AT FAULT (or lpp)
 			ItemPointerSet(&(tuple->t_self), page, tupleidx);
+			
+			// Is the tuple's start inside the page?
+			Assert( tuple->t_data + sizeof(HeapTupleStartData) < dp + BLCKSZ);
+
+			// Is the tuple at a valid index in the page?
+			unsigned int distance = (Pointer)(tuple->t_data) - (Pointer)(dp + SizeOfPageHeaderData);
+			elog(DEBUG4, "Distance is %u", distance);
+			Assert(distance < BLCKSZ);
+			Assert((distance % TUPLESIZE) == 0);
+
+			// barf(tuple);
 
 			/*
 			 * if current tuple qualifies, return it.
@@ -545,6 +602,8 @@ heapgettup(HeapScanDesc scan,
 		{
 			tupleidx = FirstOffsetNumber;
 		}
+		elog(DEBUG4, "Bringing in a new page");
+		barf(dp);
 	}
 }
 
@@ -591,10 +650,10 @@ fastgetattr(HeapTuple tup, int attnum, TupleDesc tupleDesc,
 			elog(DEBUG4, "Doing a fetch for attribute %d", attnum);
 
 			int __count;
-			for (__count = 0; __count < ATTRSIZE; __count++) {
-				elog(DEBUG4, "fetching byte %c", *(tup->t_data + sizeof(HeapTupleStartData) + (attnum -1) * ATTRSIZE + __count));
-			}
-			return fetchatt(tupleDesc->attrs[attnum - 1], tup->t_data + sizeof(HeapTupleStartData));
+			// for (__count = 0; __count < ATTRSIZE; __count++) {
+			//	elog(DEBUG4, "fetching byte %c", *(tup->t_data + sizeof(HeapTupleStartData) + (attnum -1) * ATTRSIZE + __count));
+			// }
+			return fetchatt(tupleDesc->attrs[attnum - 1], tup->t_data + sizeof(HeapTupleStartData) + (attnum -1) * ATTRSIZE);
 		}
 	}
 	elog(DEBUG4, "Attnum is 0");
@@ -1182,7 +1241,7 @@ heap_fetch(Relation relation,
 	 * fill in *tuple fields
 	 */
 	tuple->t_data = (HeapTupleStart) PageGetItemIdx(page, offnum);
-	tuple->t_len = TUPLESIZE;
+	tuple->t_len = TUPLESIZE - sizeof(HeapTupleStartData);
 	tuple->t_tableOid = RelationGetRelid(relation);
 
 	/*
@@ -1805,6 +1864,7 @@ void
 heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 				  CommandId cid, int options, BulkInsertState bistate)
 {
+	elog(PANIC, "DON'T USE THIS FUNCTION");
 	TransactionId xid = GetCurrentTransactionId();
 	HeapTuple  *heaptuples;
 	int			i;
@@ -1942,7 +2002,7 @@ heap_multi_insert(Relation relation, HeapTuple *tuples, int ntuples,
 				// tuphdr->t_hoff = heaptup->t_data->t_hoff;
 
 				/* write bitmap [+ padding] [+ oid] + data */
-				datalen = TUPLESIZE;
+				datalen = TUPLESIZE - sizeof(HeapTupleStartData);
 				memcpy(scratchptr,
 					   (char *) heaptup->t_data,
 					   datalen);
